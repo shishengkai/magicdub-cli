@@ -1,0 +1,96 @@
+"""fal/whisper ASR with diarize."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from magicdub_cli.adapters.base import Adapter
+from magicdub_cli.errors import INPUT_INVALID, AdapterError
+from magicdub_cli.fal_api import run_model, upload_file
+from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
+
+
+class WhisperAdapter(Adapter):
+    adapter_id = "fal/whisper"
+    endpoint = "fal-ai/whisper"
+
+    def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:
+        api_key = inputs["api_key"]
+        speech_path = Path(inputs["speech_path"])
+        language = inputs.get("language")  # e.g. en — whisper accepts null for auto
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        asr_wav = tmp_dir / "asr_16k_mono.wav"
+        try:
+            run_ffmpeg(
+                [
+                    "-i",
+                    str(speech_path),
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(asr_wav),
+                ]
+            )
+        except FFmpegError as exc:
+            raise AdapterError(INPUT_INVALID, str(exc)) from exc
+
+        url = upload_file(asr_wav, api_key)
+        lang_param = None
+        if language:
+            # fal whisper uses short codes like "en"
+            lang_param = language.split("-")[0]
+        result, cost = run_model(
+            endpoint=self.endpoint,
+            payload={
+                "audio_url": url,
+                "task": "transcribe",
+                "language": lang_param,
+                "chunk_level": "segment",
+                "diarize": True,
+                "batch_size": 64,
+                "prompt": "",
+                "num_speakers": None,
+            },
+            api_key=api_key,
+        )
+
+        chunks = result.get("chunks") or result.get("segments") or []
+        sentences: list[dict[str, Any]] = []
+        texts: list[str] = []
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            ts = chunk.get("timestamp") or chunk.get("timestamps") or [None, None]
+            if isinstance(ts, dict):
+                start, end = ts.get("start"), ts.get("end")
+            else:
+                start = ts[0] if len(ts) > 0 else None
+                end = ts[1] if len(ts) > 1 else None
+            if start is None or end is None:
+                continue
+            text = (chunk.get("text") or "").strip()
+            speaker = chunk.get("speaker") or chunk.get("speaker_id") or "SPEAKER_00"
+            start_ms = int(round(float(start) * 1000))
+            end_ms = int(round(float(end) * 1000))
+            sentences.append(
+                {
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "text": text,
+                    "speaker_id": str(speaker),
+                }
+            )
+            if text:
+                texts.append(text)
+
+        sentences.sort(key=lambda s: s["start_ms"])
+        transcript = (result.get("text") or " ".join(texts)).strip()
+        return {
+            "transcript": transcript,
+            "sentences": sentences,
+            "cost_cny": cost,
+        }
