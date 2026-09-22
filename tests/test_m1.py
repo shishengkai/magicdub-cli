@@ -75,7 +75,7 @@ def test_credentials_file_wins_over_env(tmp_path: Path, monkeypatch: pytest.Monk
     assert loaded["DEEPSEEK_API_KEY"] == "env-only"
 
 
-def test_ensure_user_files_creates_once(
+def test_ensure_user_files_creates_and_is_idempotent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from magicdub_cli import constants as C
@@ -88,9 +88,37 @@ def test_ensure_user_files_creates_once(
     assert cfg in created and cred in created
     assert "fal/whisper" in cfg.read_text(encoding="utf-8")
     assert "FAL_KEY=" in cred.read_text(encoding="utf-8")
-    cfg.write_text("# user edited\n", encoding="utf-8")
     assert ensure_user_files() == []
-    assert cfg.read_text(encoding="utf-8") == "# user edited\n"
+
+
+def test_ensure_user_files_backfills_missing_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from magicdub_cli import constants as C
+    from magicdub_cli.config import ensure_user_files
+
+    monkeypatch.setattr(C, "home_magicdub", lambda: tmp_path / ".magicdub")
+    cli = tmp_path / ".magicdub" / "cli"
+    cli.mkdir(parents=True)
+    cfg = cli / "config.yaml"
+    cred = cli / "credentials"
+    cfg.write_text(
+        "fitting:\n  lower_ratio: 0.5\nslots:\n  asr: [fal/whisper]\n",
+        encoding="utf-8",
+    )
+    cred.write_text("FAL_KEY=keep-me\n", encoding="utf-8")
+
+    touched = ensure_user_files()
+    assert cfg in touched and cred in touched
+    cfg_text = cfg.read_text(encoding="utf-8")
+    assert "lower_ratio: 0.5" in cfg_text
+    assert "upper_ratio:" in cfg_text
+    assert "concurrency:" in cfg_text
+    assert "translation:" in cfg_text
+    cred_text = cred.read_text(encoding="utf-8")
+    assert "FAL_KEY=keep-me" in cred_text
+    assert "DEEPSEEK_API_KEY=" in cred_text
+    assert ensure_user_files() == []
 
 
 def test_update_spec_and_requires_uv(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -37,6 +37,11 @@ slots:
   tts: [fal/index-tts-2]
 """
 
+_DEFAULT_CREDENTIAL_KEYS: tuple[str, ...] = (
+    "FAL_KEY",
+    "DEEPSEEK_API_KEY",
+)
+
 _DEFAULT_CREDENTIALS = """\
 # magicdub-cli credentials (~/.magicdub/cli/credentials)
 # KEY=value. File values win over environment variables.
@@ -47,9 +52,118 @@ DEEPSEEK_API_KEY=
 """
 
 
+def _default_config_mapping() -> dict[str, Any]:
+    return {
+        "projects_dir": None,
+        "fitting": {
+            "lower_ratio": C.FITTING_LOWER_RATIO,
+            "upper_ratio": C.FITTING_UPPER_RATIO,
+            "max_rewrites": C.MAX_REWRITES,
+        },
+        "concurrency": {k: int(v) for k, v in C.CONCURRENCY_DEFAULTS.items()},
+        "slots": {k: list(v) for k, v in C.SLOT_DEFAULTS.items()},
+    }
+
+
+def _fill_missing(defaults: Any, current: Any) -> tuple[Any, bool]:
+    """Merge ``defaults`` under ``current``; user values win. Return (merged, changed)."""
+    if isinstance(defaults, dict):
+        if not isinstance(current, dict):
+            return current, False
+        out = dict(current)
+        changed = False
+        for key, default_value in defaults.items():
+            if key not in out:
+                out[key] = default_value
+                changed = True
+                continue
+            filled, sub_changed = _fill_missing(default_value, out[key])
+            if sub_changed:
+                out[key] = filled
+                changed = True
+        return out, changed
+    return current, False
+
+
+def _write_config_mapping(path: Path, data: dict[str, Any]) -> None:
+    path.write_text(
+        yaml.safe_dump(
+            data,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _credential_keys_in_file(text: str) -> set[str]:
+    keys: set[str] = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, _ = stripped.partition("=")
+        key = key.strip()
+        if key:
+            keys.add(key)
+    return keys
+
+
+def _ensure_config_file(config_path: Path) -> bool:
+    """Create or backfill ``config.yaml``. Returns True if created or updated."""
+    if not config_path.exists():
+        config_path.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
+        return True
+
+    loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(loaded, dict):
+        raise ConfigError("config.yaml must be a mapping")
+    merged, changed = _fill_missing(_default_config_mapping(), loaded)
+    if not changed:
+        return False
+    assert isinstance(merged, dict)
+    _write_config_mapping(config_path, merged)
+    return True
+
+
+def _ensure_credentials_file(cred_path: Path) -> bool:
+    """Create or append missing credential keys. Never changes existing values."""
+    if not cred_path.exists():
+        cred_path.write_text(_DEFAULT_CREDENTIALS, encoding="utf-8")
+        try:
+            os.chmod(cred_path, 0o600)
+        except OSError:
+            pass
+        return True
+
+    text = cred_path.read_text(encoding="utf-8")
+    present = _credential_keys_in_file(text)
+    missing = [key for key in _DEFAULT_CREDENTIAL_KEYS if key not in present]
+    if not missing:
+        return False
+    if text and not text.endswith("\n"):
+        text += "\n"
+    if text and not text.endswith("\n\n"):
+        text += "\n"
+    text += "# added by magicdub-cli (new default keys)\n"
+    text += "".join(f"{key}=\n" for key in missing)
+    cred_path.write_text(text, encoding="utf-8")
+    try:
+        os.chmod(cred_path, 0o600)
+    except OSError:
+        pass
+    return True
+
+
 def ensure_user_files() -> list[Path]:
-    """Create ``~/.magicdub/cli`` defaults if missing. Never overwrite existing files."""
-    created: list[Path] = []
+    """Ensure ``~/.magicdub/cli`` defaults exist; backfill missing keys on upgrade.
+
+    - Missing files: write full templates.
+    - Existing ``config.yaml``: add missing keys/sections; keep user values.
+    - Existing ``credentials``: append missing ``KEY=`` lines; never overwrite values.
+    """
+    touched: list[Path] = []
     cli_dir = C.cli_config_dir()
     if not cli_dir.is_dir():
         cli_dir.mkdir(parents=True, exist_ok=True)
@@ -57,23 +171,17 @@ def ensure_user_files() -> list[Path]:
             os.chmod(cli_dir, 0o700)
         except OSError:
             pass
-        created.append(cli_dir)
+        touched.append(cli_dir)
 
     config_path = cli_dir / C.CONFIG_FILENAME
-    if not config_path.exists():
-        config_path.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
-        created.append(config_path)
+    if _ensure_config_file(config_path):
+        touched.append(config_path)
 
     cred_path = C.credentials_path()
-    if not cred_path.exists():
-        cred_path.write_text(_DEFAULT_CREDENTIALS, encoding="utf-8")
-        try:
-            os.chmod(cred_path, 0o600)
-        except OSError:
-            pass
-        created.append(cred_path)
+    if _ensure_credentials_file(cred_path):
+        touched.append(cred_path)
 
-    return created
+    return touched
 
 
 def load_credentials(path: Path | None = None) -> dict[str, str]:

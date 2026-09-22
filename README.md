@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/insta
 
 装好后全局命令为 `magicdub`（通常在 `~/.local/bin`；若找不到，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
 
-安装（或首次运行任意 `magicdub` 命令）会在 **`~/.magicdub/cli/`** 写入默认 **`config.yaml`** 与 **`credentials`**（已存在则不覆盖）。请编辑 `credentials` 填入 Key：
+安装、升级或任意 `magicdub` 命令会确保 **`~/.magicdub/cli/`** 下有 **`config.yaml`** 与 **`credentials`**：缺文件写完整默认；已有文件则**补齐缺失项**、保留你已填的值（凭据从不改写已有 Key）。请编辑 `credentials` 填入 Key：
 
 ```text
 FAL_KEY=...
