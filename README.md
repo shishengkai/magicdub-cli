@@ -7,13 +7,19 @@
 
 ## 安装
 
-需要：系统 `ffmpeg`／`ffprobe`、[uv](https://github.com/astral-sh/uv)（会自带可用的 Python）。
+macOS／Linux 一句安装（缺 uv／ffmpeg 时脚本会尽量补齐；Python 由 uv 拉取）：
 
 ```bash
-uv tool install git+https://github.com/shishengkai/magicdub-cli.git@v0.1.0
+curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
 ```
 
-装好后全局可用 `magicdub`（可执行文件在 `~/.local/bin`；若提示找不到命令，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
+装好后全局命令为 `magicdub`（通常在 `~/.local/bin`；若找不到命令，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
+
+可选环境变量：`MAGICDUB_REF`（默认 `main`，也可设为 tag／commit）。Windows 请先自行安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 与 ffmpeg，再执行：
+
+```bash
+uv tool install --force git+https://github.com/shishengkai/magicdub-cli.git@main
+```
 
 凭据写入 `~/.magicdub/cli/credentials`（优先）；文件里没有的 key 再读环境变量。与 `magicdub-skills` 的凭据文件分开，不读 `~/.magicdub/credentials`／`credentials.env`。
 
