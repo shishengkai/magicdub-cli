@@ -1,4 +1,4 @@
-"""CLI entry: magicdub."""
+"""CLI entry for magicdub-cli (shell command: magicdub)."""
 
 from __future__ import annotations
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Install / upgrade / rescue magicdub (package magicdub-cli) for the current user.
+# Install / upgrade / rescue magicdub-cli for the current user.
 #
-# First install, upgrade when magicdub is missing/broken, or refresh deps:
+# First install, upgrade when the `magicdub` command is missing/broken, or refresh deps:
 #   curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
 #   sh install.sh
 #
-# Day-to-day upgrade when magicdub already works:
+# Day-to-day upgrade when `magicdub` already works:
 #   magicdub update
 #
 # Version selection (install + update):
@@ -140,14 +140,14 @@ install_magicdub() {
   local ref spec
   ref="$(resolve_ref)"
   spec="git+${REPO_URL}@${ref}"
-  say "installing/upgrading magicdub from ${spec}"
+  say "installing/upgrading magicdub-cli from ${spec}"
   uv tool install --force "${spec}"
   ensure_path
   if ! have magicdub; then
-    err "magicdub not on PATH; add ~/.local/bin to PATH and retry: magicdub --version"
+    err "`magicdub` not on PATH; add ~/.local/bin to PATH and retry: magicdub --version"
     exit 1
   fi
-  say "magicdub: $(magicdub --version)"
+  say "installed: $(magicdub --version)"
 }
 
 main() {

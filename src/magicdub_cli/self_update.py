@@ -100,7 +100,7 @@ def run_update(*, ref: str | None = None, repo_url: str | None = None) -> int:
         return 1
 
     cmd = ["uv", "tool", "install", "--force", spec]
-    print(f"updating magicdub from {spec}", flush=True)
+    print(f"updating magicdub-cli from {spec}", flush=True)
     completed = subprocess.run(cmd, check=False)
     if completed.returncode != 0:
         print(

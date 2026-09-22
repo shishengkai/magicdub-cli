@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uninstall the magicdub tool (package magicdub-cli).
+# Uninstall magicdub-cli (uv tool package + entrypoints).
 # Usage:
 #   sh uninstall.sh                         # 1) tool + entrypoints only
 #   sh uninstall.sh --purge                 # 2) + ~/.magicdub/cli
@@ -19,7 +19,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
   cat <<'EOF'
-Uninstall magicdub (uv tool package: magicdub-cli).
+Uninstall magicdub-cli (uv tool package: magicdub-cli).
 
   sh uninstall.sh                       (1) remove tool + entrypoints
   sh uninstall.sh --purge               (2) also delete ~/.magicdub/cli
