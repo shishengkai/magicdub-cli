@@ -48,7 +48,7 @@ magicdub update
 magicdub update --ref v0.1.1
 ```
 
-`magicdub` 不可用、或想连同 uv／ffmpeg 一起检查时，再跑一遍安装脚本（升级／救援）：
+`magicdub` 命令不可用、或想重装本工具时，再跑一遍安装脚本（救援／重装 magicdub；**不会**把已有的 uv／ffmpeg 升到最新，只在缺失时才安装）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
