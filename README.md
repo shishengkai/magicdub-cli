@@ -7,7 +7,7 @@
 
 ## 安装
 
-macOS／Linux 推荐用仓库内 `install.sh`（缺 uv／ffmpeg 时会尽量补齐；Python 由 uv 拉取）。
+macOS／Linux 推荐用仓库内 `install.sh`（缺 uv／ffmpeg 时会尽量补齐；Python 由 uv 拉取）。同一脚本也可用于**升级**和**救援**（命令坏了／旧入口 `magicdub-cli` 残留时重装）。
 
 仓库公开后可用一句：
 
@@ -30,7 +30,7 @@ gh api repos/shishengkai/magicdub-cli/contents/install.sh -H "Accept: applicatio
 
 装好后全局命令为 `magicdub`（通常在 `~/.local/bin`；若找不到命令，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
 
-可选环境变量：`MAGICDUB_REF`（默认 `main`，也可设为 tag／commit）。Windows 请先自行安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 与 ffmpeg，再执行：
+可选环境变量：`MAGICDUB_REF`（默认 `main`，也可设为 tag／commit）、`MAGICDUB_REPO_URL`。Windows 请先自行安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 与 ffmpeg，再执行：
 
 ```bash
 uv tool install --force git+https://github.com/shishengkai/magicdub-cli.git@main
@@ -44,6 +44,22 @@ DEEPSEEK_API_KEY=...
 ```
 
 可选配置：同目录 `~/.magicdub/cli/config.yaml`。
+
+## 升级
+
+日常升级（需已能运行 `magicdub`，且本机有 `uv`）：
+
+```bash
+magicdub update
+```
+
+指定 ref（tag／分支／commit）：
+
+```bash
+magicdub update --ref main
+```
+
+`magicdub` 不可用、或想连同 uv／ffmpeg 一起检查时，再跑一遍 **`install.sh`**（升级／救援，不必先写 `update.sh`）。一般**不必**先 `uninstall`；只有要换掉残留旧入口或彻底重来时才卸载。
 
 ## 卸载
 
@@ -80,7 +96,7 @@ gh api repos/shishengkai/magicdub-cli/contents/uninstall.sh \
 curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/uninstall.sh | sh -s -- --purge
 ```
 
-（无额外参数时去掉 `--` 后面的选项即可。）升级换版本通常用第 1 种即可，再跑 `install.sh`。
+（无额外参数时去掉 `--` 后面的选项即可。）
 
 ## 运行
 

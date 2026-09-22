@@ -75,6 +75,16 @@ def test_credentials_file_wins_over_env(tmp_path: Path, monkeypatch: pytest.Monk
     assert loaded["DEEPSEEK_API_KEY"] == "env-only"
 
 
+def test_update_spec_and_requires_uv(monkeypatch: pytest.MonkeyPatch) -> None:
+    from magicdub_cli.self_update import resolve_spec, run_update
+
+    assert resolve_spec(ref="abc", repo_url="https://example.com/r.git") == (
+        "git+https://example.com/r.git@abc"
+    )
+    monkeypatch.setattr("magicdub_cli.self_update.shutil.which", lambda _: None)
+    assert run_update() == 1
+
+
 def test_create_task_and_lock(tmp_path: Path) -> None:
     video = tmp_path / "hello world.mp4"
     video.write_bytes(b"x")

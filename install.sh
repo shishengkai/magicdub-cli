@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Install magicdub (magicdub-cli) for the current user.
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
+# Install / upgrade / rescue magicdub (package magicdub-cli) for the current user.
+#
+# First install, upgrade when magicdub is missing/broken, or refresh deps:
+#   sh install.sh
+#   curl -fsSL …/install.sh | sh
+#
+# Day-to-day upgrade when magicdub already works:
+#   magicdub update
+#
 # Optional:
-#   MAGICDUB_REF=main|v0.1.0|<sha>  — git ref to install (default: main)
+#   MAGICDUB_REF=main|v0.1.0|<sha>  — git ref (default: main)
+#   MAGICDUB_REPO_URL=…             — git URL override
 
 set -euo pipefail
 
@@ -89,8 +96,8 @@ ensure_ffmpeg() {
 
 install_magicdub() {
   local spec="git+${REPO_URL}@${REF}"
-  say "installing magicdub from ${spec}"
-  # --force refreshes an existing tool install
+  say "installing/upgrading magicdub from ${spec}"
+  # --force refreshes an existing tool install (upgrade + rescue)
   uv tool install --force "${spec}"
   ensure_path
   if ! have magicdub; then
@@ -110,6 +117,7 @@ main() {
   say "done. next:"
   say "  1. put keys in ~/.magicdub/cli/credentials  (FAL_KEY, DEEPSEEK_API_KEY)"
   say "  2. magicdub run <video> --src en --tgt zh-Hans"
+  say "  3. later upgrades: magicdub update   (or re-run this install.sh)"
 }
 
 main "$@"

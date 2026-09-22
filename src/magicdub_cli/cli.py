@@ -25,6 +25,21 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--src", required=True, help="Source language code (e.g. en).")
     run.add_argument("--tgt", required=True, help="Target language code (e.g. zh-Hans).")
 
+    update = sub.add_parser(
+        "update",
+        help="Reinstall this tool from GitHub via uv (upgrade / refresh).",
+    )
+    update.add_argument(
+        "--ref",
+        default=None,
+        help="Git ref to install (tag/branch/sha). Default: MAGICDUB_REF or main.",
+    )
+    update.add_argument(
+        "--repo-url",
+        default=None,
+        help="Git repo URL. Default: MAGICDUB_REPO_URL or official GitHub URL.",
+    )
+
     return parser
 
 
@@ -43,10 +58,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.command == "run":
-        # Pipeline wired in later milestones; M0 only exposes the CLI surface.
         from magicdub_cli.pipeline.runner import run_pipeline
 
         return run_pipeline(video=args.video, src_lang=args.src, tgt_lang=args.tgt)
+
+    if args.command == "update":
+        from magicdub_cli.self_update import run_update
+
+        return run_update(ref=args.ref, repo_url=args.repo_url)
 
     parser.print_help()
     return 2
