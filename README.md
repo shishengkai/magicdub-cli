@@ -7,10 +7,25 @@
 
 ## 安装
 
-macOS／Linux 一句安装（缺 uv／ffmpeg 时脚本会尽量补齐；Python 由 uv 拉取）：
+macOS／Linux 推荐用仓库内 `install.sh`（缺 uv／ffmpeg 时会尽量补齐；Python 由 uv 拉取）。
+
+仓库公开后可用一句：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
+```
+
+当前若仍是 **private**，匿名 raw 链不可用，改用（需已能访问该仓）：
+
+```bash
+git clone https://github.com/shishengkai/magicdub-cli.git
+cd magicdub-cli && sh install.sh
+```
+
+或已登录 [GitHub CLI](https://cli.github.com/) 时：
+
+```bash
+gh api repos/shishengkai/magicdub-cli/contents/install.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
 装好后全局命令为 `magicdub`（通常在 `~/.local/bin`；若找不到命令，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
