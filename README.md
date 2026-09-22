@@ -45,6 +45,24 @@ DEEPSEEK_API_KEY=...
 
 可选配置：同目录 `~/.magicdub/cli/config.yaml`。
 
+## 卸载
+
+只卸命令（保留配置／凭据／任务成片）：
+
+```bash
+# 已 clone 时：
+sh uninstall.sh
+
+# 或已登录 gh（private 仓）：
+gh api repos/shishengkai/magicdub-cli/contents/uninstall.sh -H "Accept: application/vnd.github.raw" | sh
+```
+
+等价于 `uv tool uninstall magicdub-cli`，并清理 `magicdub`／旧名 `magicdub-cli` 入口。
+
+升级前也可先卸载再跑 `install.sh`。若连配置一起删：`sh uninstall.sh --purge`（删除 `~/.magicdub/cli`）。任务目录默认保留；要删默认任务父目录再加 `--purge-tasks`（不可恢复）。
+
+公开后也可用：`curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/uninstall.sh | sh`
+
 ## 运行
 
 ```bash
