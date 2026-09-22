@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from magicdub_cli.config import ConfigError, load_config, sanitize_stem
+from magicdub_cli.config import ConfigError, load_config, load_credentials, sanitize_stem
 from magicdub_cli.media.files import commit, file_ref, verify_file_ref
 from magicdub_cli.state.io import load_state, new_state, new_task_id, save_state
 from magicdub_cli.taskdir import acquire_lock, create_task_dir, release_lock
@@ -63,6 +63,16 @@ def test_empty_slots_list_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     cfg.write_text("slots:\n  sep: []\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="empty list"):
         load_config(cfg)
+
+
+def test_credentials_file_wins_over_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cred = tmp_path / "credentials"
+    cred.write_text("FAL_KEY=from-file\n", encoding="utf-8")
+    monkeypatch.setenv("FAL_KEY", "from-env")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "env-only")
+    loaded = load_credentials(cred)
+    assert loaded["FAL_KEY"] == "from-file"
+    assert loaded["DEEPSEEK_API_KEY"] == "env-only"
 
 
 def test_create_task_and_lock(tmp_path: Path) -> None:

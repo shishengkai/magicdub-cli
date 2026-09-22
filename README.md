@@ -7,26 +7,27 @@
 
 ## 安装
 
-需要：Python ≥ 3.12、系统 `ffmpeg`／`ffprobe`、[uv](https://github.com/astral-sh/uv)。
+需要：系统 `ffmpeg`／`ffprobe`、[uv](https://github.com/astral-sh/uv)（会自带可用的 Python）。
 
 ```bash
-uv tool install .
-magicdub-cli --version
+uv tool install git+https://github.com/shishengkai/magicdub-cli.git@v0.1.0
 ```
 
-凭据写入 `~/.magicdub/credentials`（或环境变量）：
+装好后全局可用 `magicdub`（可执行文件在 `~/.local/bin`；若提示找不到命令，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
+
+凭据写入 `~/.magicdub/cli/credentials`（优先）；文件里没有的 key 再读环境变量。与 `magicdub-skills` 的凭据文件分开，不读 `~/.magicdub/credentials`／`credentials.env`。
 
 ```text
 FAL_KEY=...
 DEEPSEEK_API_KEY=...
 ```
 
-可选配置：`~/.magicdub/cli/config.yaml`。
+可选配置：同目录 `~/.magicdub/cli/config.yaml`。
 
 ## 运行
 
 ```bash
-magicdub-cli run <video> --src en --tgt zh-Hans
+magicdub run <video> --src en --tgt zh-Hans
 ```
 
 每次 `run` 创建全新任务目录（默认 macOS：`~/Movies/MagicDub/cli/`）。v0.1.0 不做续跑。

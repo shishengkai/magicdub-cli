@@ -69,7 +69,8 @@ def cli_config_dir() -> Path:
 
 
 def credentials_path() -> Path:
-    return home_magicdub() / CREDENTIALS_FILENAME
+    """CLI-only credentials; not shared with magicdub-skills."""
+    return cli_config_dir() / CREDENTIALS_FILENAME
 
 
 def default_projects_dir() -> Path:

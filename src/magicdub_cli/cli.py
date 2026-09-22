@@ -1,4 +1,4 @@
-"""CLI entry: magicdub-cli."""
+"""CLI entry: magicdub."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from magicdub_cli import __version__
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="magicdub-cli",
+        prog="magicdub",
         description="Local video dubbing CLI (no lip-sync).",
     )
     parser.add_argument(

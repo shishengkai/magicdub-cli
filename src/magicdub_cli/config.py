@@ -17,22 +17,14 @@ class ConfigError(ValueError):
 
 
 def load_credentials(path: Path | None = None) -> dict[str, str]:
-    """Parse KEY=value files; environment variables override.
+    """Parse ``~/.magicdub/cli/credentials``; fill missing keys from the environment.
 
-    Prefers ``~/.magicdub/credentials``; also reads skills layout
-    ``credentials.env`` as read-only fallback for missing keys.
+    File values win. Environment is used only when a key is absent or empty in the file.
+    Does not read skills files (``~/.magicdub/credentials`` or ``credentials.env``).
     """
-    paths: list[Path] = []
-    if path is not None:
-        paths.append(path)
-    else:
-        paths.append(C.credentials_path())
-        paths.append(C.home_magicdub() / "credentials.env")
-
+    file_path = path if path is not None else C.credentials_path()
     result: dict[str, str] = {}
-    for file_path in paths:
-        if not file_path.is_file():
-            continue
+    if file_path.is_file():
         for line in file_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -40,7 +32,7 @@ def load_credentials(path: Path | None = None) -> dict[str, str]:
             key, _, value = line.partition("=")
             key = key.strip()
             value = value.strip().strip('"').strip("'")
-            if key and key not in result:
+            if key:
                 result[key] = value
 
     for key in (
@@ -52,6 +44,8 @@ def load_credentials(path: Path | None = None) -> dict[str, str]:
         "MVSEP_API_KEY",
         *list(result.keys()),
     ):
+        if result.get(key):
+            continue
         env = os.environ.get(key)
         if env is not None and env != "":
             result[key] = env
@@ -59,7 +53,9 @@ def load_credentials(path: Path | None = None) -> dict[str, str]:
 
 
 def require_credential(creds: dict[str, str], key: str) -> str:
-    value = creds.get(key) or os.environ.get(key)
+    value = creds.get(key) or ""
+    if not value:
+        value = os.environ.get(key) or ""
     if not value:
         raise ConfigError(f"missing credential {key}")
     return value
