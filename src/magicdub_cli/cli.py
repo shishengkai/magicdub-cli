@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__version__}",
+        version=f"magicdub-cli {__version__}",
     )
     sub = parser.add_subparsers(dest="command")
 
