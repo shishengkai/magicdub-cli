@@ -49,6 +49,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(line_buffering=True)
     except Exception:
         pass
+    from magicdub_cli.config import ensure_user_files
+
+    ensure_user_files()
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     args = parser.parse_args(argv)

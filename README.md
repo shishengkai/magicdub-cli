@@ -17,22 +17,21 @@ curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/insta
 
 装好后全局命令为 `magicdub`（通常在 `~/.local/bin`；若找不到，把该目录加入 `PATH`）。验证：`magicdub --version`。仓库／包名仍为 `magicdub-cli`。
 
-指定版本示例：`MAGICDUB_REF=v0.1.1 sh install.sh`。
-
-Windows：先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 与 ffmpeg，再执行（将 `<tag>` 换成 [Releases](https://github.com/shishengkai/magicdub-cli/releases) 上的最新正式 tag）：
-
-```bash
-uv tool install --force git+https://github.com/shishengkai/magicdub-cli.git@<tag>
-```
-
-凭据写入 `~/.magicdub/cli/credentials`（优先）；文件里没有的 key 再读环境变量。与 `magicdub-skills` 的凭据文件分开。
+安装（或首次运行任意 `magicdub` 命令）会在 **`~/.magicdub/cli/`** 写入默认 **`config.yaml`** 与 **`credentials`**（已存在则不覆盖）。请编辑 `credentials` 填入 Key：
 
 ```text
 FAL_KEY=...
 DEEPSEEK_API_KEY=...
 ```
 
-可选配置：同目录 `~/.magicdub/cli/config.yaml`。
+指定版本示例：`MAGICDUB_REF=v0.1.1 sh install.sh`。
+
+Windows：先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 与 ffmpeg，再执行（将 `<tag>` 换成 [Releases](https://github.com/shishengkai/magicdub-cli/releases) 上的最新正式 tag），然后任跑一次 `magicdub --version` 以生成配置文件：
+
+```bash
+uv tool install --force git+https://github.com/shishengkai/magicdub-cli.git@<tag>
+magicdub --version
+```
 
 ## 升级
 

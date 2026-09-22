@@ -148,6 +148,7 @@ install_magicdub() {
     exit 1
   fi
   say "installed: $(magicdub --version)"
+  # magicdub --version already ensures ~/.magicdub/cli defaults exist
 }
 
 main() {
@@ -157,10 +158,10 @@ main() {
   ensure_ffmpeg
   install_magicdub
   say ""
-  say "done. next:"
-  say "  1. put keys in ~/.magicdub/cli/credentials  (FAL_KEY, DEEPSEEK_API_KEY)"
-  say "  2. magicdub run <video> --src en --tgt zh-Hans"
-  say "  3. later upgrades: magicdub update   (or re-run this install.sh)"
+  say "done. config: ~/.magicdub/cli/config.yaml"
+  say "       credentials: ~/.magicdub/cli/credentials  (fill FAL_KEY / DEEPSEEK_API_KEY)"
+  say "next: magicdub run <video> --src en --tgt zh-Hans"
+  say "later upgrades: magicdub update   (or re-run this install.sh)"
 }
 
 main "$@"

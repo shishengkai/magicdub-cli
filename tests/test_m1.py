@@ -75,6 +75,24 @@ def test_credentials_file_wins_over_env(tmp_path: Path, monkeypatch: pytest.Monk
     assert loaded["DEEPSEEK_API_KEY"] == "env-only"
 
 
+def test_ensure_user_files_creates_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from magicdub_cli import constants as C
+    from magicdub_cli.config import ensure_user_files
+
+    monkeypatch.setattr(C, "home_magicdub", lambda: tmp_path / ".magicdub")
+    created = ensure_user_files()
+    cfg = tmp_path / ".magicdub" / "cli" / "config.yaml"
+    cred = tmp_path / ".magicdub" / "cli" / "credentials"
+    assert cfg in created and cred in created
+    assert "fal/whisper" in cfg.read_text(encoding="utf-8")
+    assert "FAL_KEY=" in cred.read_text(encoding="utf-8")
+    cfg.write_text("# user edited\n", encoding="utf-8")
+    assert ensure_user_files() == []
+    assert cfg.read_text(encoding="utf-8") == "# user edited\n"
+
+
 def test_update_spec_and_requires_uv(monkeypatch: pytest.MonkeyPatch) -> None:
     from magicdub_cli.self_update import resolve_spec, run_update
 

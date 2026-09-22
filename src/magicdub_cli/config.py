@@ -16,6 +16,66 @@ class ConfigError(ValueError):
     """Invalid user configuration."""
 
 
+_DEFAULT_CONFIG_YAML = """\
+# magicdub-cli user config (~/.magicdub/cli/config.yaml)
+# Omitted keys fall back to built-in defaults. Empty slots lists are errors.
+
+projects_dir: null
+fitting:
+  lower_ratio: 0.8
+  upper_ratio: 1.2
+  max_rewrites: 2
+concurrency:
+  sep: 1
+  asr: 1
+  translation: 3
+  tts: 3
+slots:
+  sep: [fal/demucs]
+  asr: [fal/whisper]
+  translation: [deepseek/deepseek-flash]
+  tts: [fal/index-tts-2]
+"""
+
+_DEFAULT_CREDENTIALS = """\
+# magicdub-cli credentials (~/.magicdub/cli/credentials)
+# KEY=value. File values win over environment variables.
+# Fill in at least FAL_KEY and DEEPSEEK_API_KEY for the default v0.1 adapters.
+
+FAL_KEY=
+DEEPSEEK_API_KEY=
+"""
+
+
+def ensure_user_files() -> list[Path]:
+    """Create ``~/.magicdub/cli`` defaults if missing. Never overwrite existing files."""
+    created: list[Path] = []
+    cli_dir = C.cli_config_dir()
+    if not cli_dir.is_dir():
+        cli_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(cli_dir, 0o700)
+        except OSError:
+            pass
+        created.append(cli_dir)
+
+    config_path = cli_dir / C.CONFIG_FILENAME
+    if not config_path.exists():
+        config_path.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
+        created.append(config_path)
+
+    cred_path = C.credentials_path()
+    if not cred_path.exists():
+        cred_path.write_text(_DEFAULT_CREDENTIALS, encoding="utf-8")
+        try:
+            os.chmod(cred_path, 0o600)
+        except OSError:
+            pass
+        created.append(cred_path)
+
+    return created
+
+
 def load_credentials(path: Path | None = None) -> dict[str, str]:
     """Parse ``~/.magicdub/cli/credentials``; fill missing keys from the environment.
 
