@@ -6,9 +6,9 @@ from magicdub_cli.adapters.base import Adapter
 
 
 def _load() -> dict[str, type[Adapter]]:
-    from magicdub_cli.adapters.asr.whisper import WhisperAdapter
-    from magicdub_cli.adapters.sep.demucs import DemucsAdapter
-    from magicdub_cli.adapters.translation.deepseek_flash import DeepSeekFlashAdapter
+    from magicdub_cli.adapters.asr.fal_whisper import WhisperAdapter
+    from magicdub_cli.adapters.sep.fal_demucs import DemucsAdapter
+    from magicdub_cli.adapters.translation.deepseek_deepseek_flash import DeepSeekFlashAdapter
     from magicdub_cli.adapters.tts.fal_index_tts_2 import IndexTTS2Adapter
 
     adapters: list[type[Adapter]] = [
