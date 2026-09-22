@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Uninstall the magicdub tool (package magicdub-cli).
 # Usage:
-#   sh uninstall.sh
-#   sh uninstall.sh --purge          # also remove ~/.magicdub/cli (config + credentials)
-#   MAGICDUB_PURGE=1 sh uninstall.sh
+#   sh uninstall.sh                         # 1) tool + entrypoints only
+#   sh uninstall.sh --purge                 # 2) + ~/.magicdub/cli
+#   sh uninstall.sh --purge --purge-tasks   # 3) + default task dirs
+#   MAGICDUB_PURGE=1 sh uninstall.sh        # same as --purge
 #
-# Does not delete task media under Movies/MagicDub/cli (or platform equivalent)
-# unless you pass --purge-tasks (destructive).
+# --purge-tasks implies --purge (config/credentials go too).
 
 set -euo pipefail
 
@@ -21,13 +21,12 @@ usage() {
   cat <<'EOF'
 Uninstall magicdub (uv tool package: magicdub-cli).
 
-  sh uninstall.sh              remove tool binaries only
-  sh uninstall.sh --purge      also delete ~/.magicdub/cli
-  sh uninstall.sh --purge-tasks
-                               also delete default task parent dirs
-                               (Movies|Videos/MagicDub/cli) — destructive
+  sh uninstall.sh                       (1) remove tool + entrypoints
+  sh uninstall.sh --purge               (2) also delete ~/.magicdub/cli
+  sh uninstall.sh --purge --purge-tasks (3) also delete default task dirs
+                                        (Movies|Videos/MagicDub/cli)
 
-Environment: MAGICDUB_PURGE=1 is the same as --purge.
+--purge-tasks implies --purge. Environment MAGICDUB_PURGE=1 equals --purge.
 EOF
 }
 

@@ -47,21 +47,40 @@ DEEPSEEK_API_KEY=...
 
 ## 卸载
 
-只卸命令（保留配置／凭据／任务成片）：
+在已 clone 的仓库目录下执行（下面三种程度递增；后一种包含前一种）。
+
+1. **只卸工具和命令入口**（保留 `~/.magicdub/cli` 配置／凭据，以及任务成片目录）
 
 ```bash
-# 已 clone 时：
 sh uninstall.sh
-
-# 或已登录 gh（private 仓）：
-gh api repos/shishengkai/magicdub-cli/contents/uninstall.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
-等价于 `uv tool uninstall magicdub-cli`，并清理 `magicdub`／旧名 `magicdub-cli` 入口。
+2. **在 1 的基础上，再删凭据和配置**（删除整个 `~/.magicdub/cli/`）
 
-升级前也可先卸载再跑 `install.sh`。若连配置一起删：`sh uninstall.sh --purge`（删除 `~/.magicdub/cli`）。任务目录默认保留；要删默认任务父目录再加 `--purge-tasks`（不可恢复）。
+```bash
+sh uninstall.sh --purge
+```
 
-公开后也可用：`curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/uninstall.sh | sh`
+3. **在 2 的基础上，再删默认任务目录**（如 macOS `~/Movies/MagicDub/cli/`；不可恢复）
+
+```bash
+sh uninstall.sh --purge --purge-tasks
+```
+
+未 clone、且已登录 [GitHub CLI](https://cli.github.com/) 时（private 仓），把脚本接到管道并带上同样参数，例如第 3 种：
+
+```bash
+gh api repos/shishengkai/magicdub-cli/contents/uninstall.sh \
+  -H "Accept: application/vnd.github.raw" | sh -s -- --purge --purge-tasks
+```
+
+仓库公开后也可用：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/uninstall.sh | sh -s -- --purge
+```
+
+（无额外参数时去掉 `--` 后面的选项即可。）升级换版本通常用第 1 种即可，再跑 `install.sh`。
 
 ## 运行
 
