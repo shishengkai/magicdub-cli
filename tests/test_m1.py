@@ -78,6 +78,13 @@ def test_credentials_file_wins_over_env(tmp_path: Path, monkeypatch: pytest.Monk
 def test_update_spec_and_requires_uv(monkeypatch: pytest.MonkeyPatch) -> None:
     from magicdub_cli.self_update import resolve_spec, run_update
 
+    monkeypatch.setattr(
+        "magicdub_cli.self_update.fetch_latest_release_tag",
+        lambda slug="shishengkai/magicdub-cli": "v9.9.9",
+    )
+    assert resolve_spec(repo_url="https://github.com/shishengkai/magicdub-cli.git") == (
+        "git+https://github.com/shishengkai/magicdub-cli.git@v9.9.9"
+    )
     assert resolve_spec(ref="abc", repo_url="https://example.com/r.git") == (
         "git+https://example.com/r.git@abc"
     )

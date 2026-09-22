@@ -2,29 +2,31 @@
 # Install / upgrade / rescue magicdub (package magicdub-cli) for the current user.
 #
 # First install, upgrade when magicdub is missing/broken, or refresh deps:
+#   curl -fsSL https://raw.githubusercontent.com/shishengkai/magicdub-cli/main/install.sh | sh
 #   sh install.sh
-#   curl -fsSL …/install.sh | sh
 #
 # Day-to-day upgrade when magicdub already works:
 #   magicdub update
 #
-# Optional:
-#   MAGICDUB_REF=main|v0.1.0|<sha>  — git ref (default: main)
-#   MAGICDUB_REPO_URL=…             — git URL override
-
+# Version selection (install + update):
+#   default → latest *published, non-prerelease* GitHub Release tag
+#   override → MAGICDUB_REF=v0.1.1|main|<sha>
+#   MAGICDUB_REPO_URL=…  — git URL override (slug inferred for the API)
+#
 set -euo pipefail
 
 REPO_URL="${MAGICDUB_REPO_URL:-https://github.com/shishengkai/magicdub-cli.git}"
-REF="${MAGICDUB_REF:-main}"
+REPO_SLUG="${MAGICDUB_REPO_SLUG:-shishengkai/magicdub-cli}"
 
 say() { printf '%s\n' "$*"; }
 err() { printf 'error: %s\n' "$*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
 need_unix() {
   case "$(uname -s)" in
     Darwin | Linux) ;;
     *)
-      err "this installer supports macOS and Linux only; on Windows install uv + ffmpeg, then: uv tool install git+${REPO_URL}@${REF}"
+      err "this installer supports macOS and Linux only; on Windows install uv + ffmpeg, then use: uv tool install --force git+${REPO_URL}@<release-tag>"
       exit 1
       ;;
   esac
@@ -37,7 +39,47 @@ ensure_path() {
   fi
 }
 
-have() { command -v "$1" >/dev/null 2>&1; }
+resolve_ref() {
+  if [ -n "${MAGICDUB_REF:-}" ]; then
+    printf '%s\n' "${MAGICDUB_REF}"
+    return
+  fi
+  if ! have curl; then
+    err "curl is required to resolve the latest GitHub Release (or set MAGICDUB_REF)"
+    exit 1
+  fi
+  if ! have python3; then
+    err "python3 is required to parse the latest GitHub Release (or set MAGICDUB_REF)"
+    exit 1
+  fi
+  local api="https://api.github.com/repos/${REPO_SLUG}/releases/latest"
+  local json tag
+  if ! json="$(curl -fsSL \
+    -H 'Accept: application/vnd.github+json' \
+    -H 'User-Agent: magicdub-cli-install' \
+    -H 'X-GitHub-Api-Version: 2022-11-28' \
+    "${api}")"; then
+    err "failed to fetch ${api}; publish a Release or set MAGICDUB_REF"
+    exit 1
+  fi
+  tag="$(RELEASE_JSON="${json}" python3 - <<'PY'
+import json, os, sys
+data = json.loads(os.environ["RELEASE_JSON"])
+if data.get("draft") or data.get("prerelease"):
+    sys.stderr.write("latest release is draft/prerelease; refusing\n")
+    sys.exit(2)
+tag = (data.get("tag_name") or "").strip()
+if not tag:
+    sys.stderr.write("latest release has empty tag_name\n")
+    sys.exit(2)
+print(tag)
+PY
+)" || {
+    err "could not parse latest release tag; set MAGICDUB_REF explicitly"
+    exit 1
+  }
+  printf '%s\n' "${tag}"
+}
 
 install_uv() {
   if have uv; then
@@ -95,9 +137,10 @@ ensure_ffmpeg() {
 }
 
 install_magicdub() {
-  local spec="git+${REPO_URL}@${REF}"
+  local ref spec
+  ref="$(resolve_ref)"
+  spec="git+${REPO_URL}@${ref}"
   say "installing/upgrading magicdub from ${spec}"
-  # --force refreshes an existing tool install (upgrade + rescue)
   uv tool install --force "${spec}"
   ensure_path
   if ! have magicdub; then

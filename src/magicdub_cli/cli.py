@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument(
         "--ref",
         default=None,
-        help="Git ref to install (tag/branch/sha). Default: MAGICDUB_REF or main.",
+        help="Git ref to install (tag/branch/sha). Default: MAGICDUB_REF or latest GitHub Release.",
     )
     update.add_argument(
         "--repo-url",
