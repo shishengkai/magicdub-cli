@@ -41,6 +41,7 @@ for arg in "$@"; do
       ;;
     --purge-tasks)
       PURGE_TASKS=1
+      PURGE_CONFIG=1
       ;;
     *)
       err "unknown option: $arg"
