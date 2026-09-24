@@ -1,7 +1,7 @@
 """End-to-end pipeline runner (single new task, no resume).
 
-Fitting loop is round-based and serial:
-  batch translation → per-sentence TTS → duration_fitting → mark selection
+Fitting loop is round-based and serial by phase within each round:
+  batch translation → all TTS for the round → all duration_fitting → mark selection
   → batch retranslate all rejected (up to max_rewrites) → then per-sentence alignment.
 """
 
@@ -95,7 +95,7 @@ def run_pipeline(*, video: str, src_lang: str, tgt_lang: str) -> int:
 
 
 def _run_fitting_rounds(task_root: Path, state: dict[str, Any]) -> bool:
-    """Round-based serial TTS → duration_fitting → selection; batch rewrite rejected."""
+    """Round-based: all TTS, then all duration_fitting/selection, then batch rewrite."""
     lo, hi, max_attempt = fitting_limits(state)
 
     for attempt in range(1, max_attempt + 1):
@@ -114,6 +114,8 @@ def _run_fitting_rounds(task_root: Path, state: dict[str, Any]) -> bool:
                 ),
             ):
                 return False
+
+        for sid in pending_ids:
             if not _run_step(
                 task_root,
                 state,
