@@ -1,4 +1,9 @@
-"""End-to-end pipeline runner for v0.1.0 (single new task, no resume)."""
+"""End-to-end pipeline runner (single new task, no resume).
+
+Fitting loop is round-based and serial:
+  batch translation → per-sentence TTS → duration_fitting → mark selection
+  → batch retranslate all rejected (up to max_rewrites) → then per-sentence alignment.
+"""
 
 from __future__ import annotations
 
@@ -42,15 +47,22 @@ def run_pipeline(*, video: str, src_lang: str, tgt_lang: str) -> int:
         ):
             return 1
 
+        if not _run_fitting_rounds(task_root, state):
+            return 1
+
         for sent in state["assets"]["sentences"]:
             sid = sent["id"]
-            if not _process_sentence_chain(task_root, state, sid, attempt=1):
+            if not _run_step(
+                task_root,
+                state,
+                "alignment",
+                lambda s=sid: alignment.run(task_root, state, sentence_id=s),
+            ):
                 return 1
 
         if not _run_step(task_root, state, "mixing", lambda: mixing.run(task_root, state)):
             return 1
 
-        # finish
         _mark_step(state, "finish", "running")
         final = state["assets"]["tgt"]
         for key in ("final_video", "final_audio", "srt"):
@@ -82,75 +94,110 @@ def run_pipeline(*, video: str, src_lang: str, tgt_lang: str) -> int:
             pass
 
 
-def _process_sentence_chain(
-    task_root: Path, state: dict[str, Any], sid: int, *, attempt: int
-) -> bool:
-    fitting = state["run"]["fitting"]
-    lo = float(fitting["lower_ratio"])
-    hi = float(fitting["upper_ratio"])
-    max_rewrites = int(fitting["max_rewrites"])
-    max_attempt = 1 + max_rewrites
+def _run_fitting_rounds(task_root: Path, state: dict[str, Any]) -> bool:
+    """Round-based serial TTS → duration_fitting → selection; batch rewrite rejected."""
+    lo, hi, max_attempt = fitting_limits(state)
 
-    current = attempt
-    while True:
-        if not _run_step(
-            task_root,
-            state,
-            "tts",
-            lambda c=current: tts.run(task_root, state, sentence_id=sid, attempt=c),
-        ):
-            return False
-        if not _run_step(
-            task_root,
-            state,
-            "duration_fitting",
-            lambda c=current: duration_fitting.run(task_root, state, sentence_id=sid, attempt=c),
-        ):
-            return False
+    for attempt in range(1, max_attempt + 1):
+        pending_ids = sentence_ids_for_attempt(state, attempt)
+        if not pending_ids:
+            break
 
-        sent = next(s for s in state["assets"]["sentences"] if s["id"] == sid)
-        tgt = next(t for t in sent["tgt"] if t["attempt"] == current)
-        ratio = float(tgt["fitting_ratio"])
-
-        if lo <= ratio <= hi:
-            _select(sent, current, "fitting_pass")
-            save_state(task_root, state)
-            return _run_step(
+        print(f"fitting round attempt={attempt} sentences={pending_ids}")
+        for sid in pending_ids:
+            if not _run_step(
                 task_root,
                 state,
-                "alignment",
-                lambda: alignment.run(task_root, state, sentence_id=sid),
-            )
-
-        if current < max_attempt:
-            tgt["selection"] = "rejected"
+                "tts",
+                lambda s=sid, a=attempt: tts.run(
+                    task_root, state, sentence_id=s, attempt=a
+                ),
+            ):
+                return False
+            if not _run_step(
+                task_root,
+                state,
+                "duration_fitting",
+                lambda s=sid, a=attempt: duration_fitting.run(
+                    task_root, state, sentence_id=s, attempt=a
+                ),
+            ):
+                return False
+            apply_attempt_selection(state, sentence_id=sid, attempt=attempt, lo=lo, hi=hi)
             save_state(task_root, state)
-            next_attempt = current + 1
+
+        rejected_ids = unsettled_sentence_ids(state)
+        if not rejected_ids:
+            break
+
+        if attempt < max_attempt:
+            next_attempt = attempt + 1
             if not _run_step(
                 task_root,
                 state,
                 "translation",
-                lambda n=next_attempt: translation.run(
-                    task_root, state, sentence_ids=[sid], attempt=n
+                lambda ids=list(rejected_ids), n=next_attempt: translation.run(
+                    task_root, state, sentence_ids=ids, attempt=n
                 ),
             ):
                 return False
-            current = next_attempt
             continue
 
-        # forced: closest to band among all attempts
-        best = _closest_attempt(sent, lo, hi)
-        _select(sent, best, "forced")
+        for sid in rejected_ids:
+            sent = next(s for s in state["assets"]["sentences"] if s["id"] == sid)
+            best = closest_attempt(sent, lo, hi)
+            select_attempt(sent, best, "forced")
         save_state(task_root, state)
-        return _run_step(
-            task_root,
-            state,
-            "alignment",
-            lambda: alignment.run(task_root, state, sentence_id=sid),
+
+    return True
+
+
+def fitting_limits(state: dict[str, Any]) -> tuple[float, float, int]:
+    fitting = state["run"]["fitting"]
+    lo = float(fitting["lower_ratio"])
+    hi = float(fitting["upper_ratio"])
+    max_attempt = 1 + int(fitting["max_rewrites"])
+    return lo, hi, max_attempt
+
+
+def sentence_ids_for_attempt(state: dict[str, Any], attempt: int) -> list[int]:
+    """Unsettled sentences that already have text for this attempt."""
+    ids: list[int] = []
+    for sent in state["assets"]["sentences"]:
+        if sent.get("selected_attempt") is not None:
+            continue
+        tgt = next(
+            (t for t in sent.get("tgt") or [] if t.get("attempt") == attempt and t.get("text")),
+            None,
         )
+        if tgt is not None:
+            ids.append(int(sent["id"]))
+    return ids
 
 
-def _closest_attempt(sent: dict[str, Any], lo: float, hi: float) -> int:
+def unsettled_sentence_ids(state: dict[str, Any]) -> list[int]:
+    return [
+        int(s["id"])
+        for s in state["assets"]["sentences"]
+        if s.get("selected_attempt") is None
+    ]
+
+
+def apply_attempt_selection(
+    state: dict[str, Any], *, sentence_id: int, attempt: int, lo: float, hi: float
+) -> str:
+    """Mark fitting_pass or rejected for this attempt. Returns selection label."""
+    sent = next(s for s in state["assets"]["sentences"] if s["id"] == sentence_id)
+    tgt = next(t for t in sent["tgt"] if t["attempt"] == attempt)
+    ratio = float(tgt["fitting_ratio"])
+    if lo <= ratio <= hi:
+        select_attempt(sent, attempt, "fitting_pass")
+        return "fitting_pass"
+    tgt["selection"] = "rejected"
+    return "rejected"
+
+
+def closest_attempt(sent: dict[str, Any], lo: float, hi: float) -> int:
     def distance(ratio: float) -> float:
         if ratio < lo:
             return lo - ratio
@@ -169,7 +216,7 @@ def _closest_attempt(sent: dict[str, Any], lo: float, hi: float) -> int:
     return int(candidates[0]["attempt"])
 
 
-def _select(sent: dict[str, Any], attempt: int, selection: str) -> None:
+def select_attempt(sent: dict[str, Any], attempt: int, selection: str) -> None:
     for tgt in sent["tgt"]:
         if tgt["attempt"] == attempt:
             tgt["selection"] = selection

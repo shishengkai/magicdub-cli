@@ -23,6 +23,90 @@ DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 USD_PER_M_INPUT = 0.14
 USD_PER_M_OUTPUT = 0.28
 
+_SYSTEM_BASE = (
+    "You are a professional audiovisual translator for dubbing. "
+    "Translate faithfully into natural spoken language. "
+    "Return ONLY valid JSON: {\"translations\":[{\"id\":<int>,\"text\":\"...\"},...]} "
+    "with the same ids as the task. No markdown."
+)
+
+_SYSTEM_REVISION = (
+    " This is a LENGTH REVISION pass for dubbing timing. "
+    "Each sentence has target_duration_ms and prior TTS measurements. "
+    "Rewrite so the NEXT TTS take is closer to target_duration_ms. "
+    "If fitting_ratio > 1 (or action says TOO LONG): shorten — "
+    "fewer syllables, tighter wording. "
+    "If fitting_ratio < 1 (or action says TOO SHORT): lengthen slightly "
+    "with natural speech, not filler. "
+    "Do not change meaning, speaker intent, or facts. "
+    "Prefer spoken cadence over any character-count formula; "
+    "never assume a fixed chars-per-second rate."
+)
+
+
+def build_messages(
+    *,
+    transcript: str,
+    src_language: str,
+    tgt_language: str,
+    sentences: list[dict[str, Any]],
+    max_attempt: int | None = None,
+) -> list[dict[str, str]]:
+    """Build chat messages for initial or revision translate (history empty vs non-empty)."""
+    is_revision = any(item.get("history") for item in sentences)
+    system = _SYSTEM_BASE + (_SYSTEM_REVISION if is_revision else "")
+    context = (
+        f"Full source transcript (context only — do NOT translate the whole block):\n"
+        f"Language: {src_language}\n---\n{transcript}\n---"
+    )
+    lines: list[str] = [f"Target language: {tgt_language}"]
+    if is_revision:
+        attempt = next((int(item.get("attempt") or 0) for item in sentences), 0)
+        cap = f" of max {max_attempt}" if max_attempt else ""
+        lines.append(f"Pass: revise_timing (attempt={attempt}{cap})")
+        lines.append(
+            "Only revise the sentences below. Use prior TTS duration vs target_duration_ms. "
+            "Goal: next TTS duration ≈ target_duration_ms."
+        )
+    else:
+        lines.append("Pass: initial")
+        lines.append(
+            "Translate each sentence. Aim for spoken length that can fit about "
+            "target_duration_ms when read naturally (rough guide only; no prior TTS yet)."
+        )
+
+    for item in sentences:
+        part = [
+            f"- id={item['id']}",
+            f"  source: {item['src_text']}",
+            f"  target_duration_ms: {item['target_duration_ms']}",
+        ]
+        history = item.get("history") or []
+        if history:
+            part.append("  prior attempts:")
+            for h in history:
+                ratio = h.get("fitting_ratio")
+                if ratio is not None and float(ratio) > 1:
+                    action = "TOO LONG — shorten; keep meaning"
+                elif ratio is not None and float(ratio) < 1:
+                    action = "TOO SHORT — lengthen; keep meaning"
+                else:
+                    action = "revise length toward target; keep meaning"
+                part.append(
+                    f"    - attempt={h.get('attempt')}"
+                    f" text={h.get('text')!r}"
+                    f" tts_duration_ms={h.get('tts_duration_ms')}"
+                    f" fitting_ratio={ratio}"
+                    f" action: {action}"
+                )
+        lines.extend(part)
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": context},
+        {"role": "user", "content": "\n".join(lines)},
+    ]
+
 
 class DeepSeekFlashAdapter(Adapter):
     adapter_id = "deepseek/deepseek-flash"
@@ -33,54 +117,20 @@ class DeepSeekFlashAdapter(Adapter):
         src_language = inputs["src_language"]
         tgt_language = inputs["tgt_language"]
         sentences = inputs["sentences"]
+        max_attempt = inputs.get("max_attempt")
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
-        system = (
-            "You are a professional audiovisual translator. "
-            "Translate faithfully into natural spoken language for dubbing. "
-            "Return ONLY valid JSON: {\"translations\":[{\"id\":<int>,\"text\":\"...\"},...]} "
-            "with the same ids as the task. No markdown."
+        messages = build_messages(
+            transcript=transcript,
+            src_language=src_language,
+            tgt_language=tgt_language,
+            sentences=sentences,
+            max_attempt=int(max_attempt) if max_attempt is not None else None,
         )
-        context = (
-            f"Full source transcript (context only — do NOT translate the whole block):\n"
-            f"Language: {src_language}\n---\n{transcript}\n---"
-        )
-        lines: list[str] = [
-            f"Target language: {tgt_language}",
-            "Translate each sentence below. Keep meaning; make speech natural.",
-        ]
-        for item in sentences:
-            part = [
-                f"- id={item['id']}",
-                f"  source: {item['src_text']}",
-                f"  target_duration_ms: {item['target_duration_ms']}",
-            ]
-            history = item.get("history") or []
-            if history:
-                part.append("  prior attempts (revise length; meaning unchanged):")
-                for h in history:
-                    ratio = h.get("fitting_ratio")
-                    hint = ""
-                    if ratio is not None:
-                        if ratio > 1:
-                            hint = " (too long — shorten)"
-                        elif ratio < 1:
-                            hint = " (too short — lengthen)"
-                    part.append(
-                        f"    attempt={h.get('attempt')} text={h.get('text')!r} "
-                        f"tts_duration_ms={h.get('tts_duration_ms')} "
-                        f"fitting_ratio={ratio}{hint}"
-                    )
-            lines.extend(part)
-        user = "\n".join(lines)
 
         payload = {
             "model": "deepseek-flash",
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": context},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "stream": False,
             "temperature": 0.3,
         }

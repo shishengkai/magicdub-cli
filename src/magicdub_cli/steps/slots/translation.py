@@ -65,6 +65,7 @@ def run(
     order = state["run"]["slots"]["translation"]["order"]
     creds = load_credentials()
     tmp = task_root / C.TMP / "translation"
+    max_attempt = 1 + int(state["run"]["fitting"]["max_rewrites"])
     last_err: AdapterError | None = None
     for adapter_id in order:
         adapter = get_adapter(adapter_id)
@@ -77,6 +78,7 @@ def run(
                     "src_language": state["assets"]["src"]["language"],
                     "tgt_language": state["assets"]["tgt"]["language"],
                     "sentences": payload_sentences,
+                    "max_attempt": max_attempt,
                 },
                 tmp,
             )
