@@ -10,9 +10,9 @@ from typing import Any
 
 from magicdub_cli import constants as C
 from magicdub_cli.adapters.base import Adapter
-from magicdub_cli.errors import INPUT_INVALID, AdapterError
+from magicdub_cli.errors import INPUT_INVALID, USD_TO_CNY, AdapterError
 from magicdub_cli.fal_api import run_model, upload_file
-from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
+from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s, run_ffmpeg
 
 
 class IndexTTS2Adapter(Adapter):
@@ -29,7 +29,7 @@ class IndexTTS2Adapter(Adapter):
         ref = _maybe_pad_reference(ref_path, tmp_dir, source_text=source_text)
         url = upload_file(ref, api_key)
         out = tmp_dir / "tts.wav"
-        _result, cost = run_model(
+        run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,
@@ -42,12 +42,24 @@ class IndexTTS2Adapter(Adapter):
         )
         if not out.is_file():
             raise AdapterError("external_fatal", "index-tts-2 produced no audio")
+        # Billing is local: ignore fal_api estimate; measure generated audio.
+        cost_cny = _cost_cny_from_generated(out)
         final = tmp_dir / "tts_f32.wav"
         try:
             run_ffmpeg(["-i", str(out), "-c:a", "pcm_f32le", str(final)])
         except FFmpegError as exc:
-            raise AdapterError(INPUT_INVALID, str(exc)) from exc
-        return {"audio_path": final, "cost_cny": cost}
+            raise AdapterError(INPUT_INVALID, str(exc), cost_cny=cost_cny) from exc
+        return {"audio_path": final, "cost_cny": cost_cny}
+
+
+def _cost_cny_from_generated(path: Path) -> float:
+    """ceil(duration_s) × $0.002 × USD_TO_CNY."""
+    try:
+        dur_s = audio_duration_s(path)
+    except FFmpegError as exc:
+        raise AdapterError(INPUT_INVALID, f"cannot measure TTS duration: {exc}") from exc
+    billable = math.ceil(dur_s)
+    return round(billable * C.INDEX_TTS_USD_PER_SEC * USD_TO_CNY, 8)
 
 
 def _maybe_pad_reference(ref_path: Path, tmp_dir: Path, *, source_text: str) -> Path:

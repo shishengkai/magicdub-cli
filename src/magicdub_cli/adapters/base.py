@@ -14,4 +14,4 @@ class Adapter(ABC):
 
     @abstractmethod
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:
-        """Execute and return product refs (paths relative or absolute under tmp_dir)."""
+        """Execute and return product refs plus ``cost_cny`` (CNY float or None)."""

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
+from magicdub_cli import constants as C
 from magicdub_cli.adapters.base import Adapter
-from magicdub_cli.errors import INPUT_INVALID, AdapterError
+from magicdub_cli.errors import INPUT_INVALID, USD_TO_CNY, AdapterError
 from magicdub_cli.fal_api import run_model, upload_file
 from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
 
@@ -43,7 +45,7 @@ class WhisperAdapter(Adapter):
         if language:
             # fal whisper uses short codes like "en"
             lang_param = language.split("-")[0]
-        result, cost = run_model(
+        result, _fal_cost, inference_time = run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,
@@ -57,6 +59,8 @@ class WhisperAdapter(Adapter):
             },
             api_key=api_key,
         )
+        # Local estimate: ignore fal_api billing/pricing; use status inference_time.
+        cost_cny = _cost_cny_from_inference(inference_time)
 
         chunks = result.get("chunks") or result.get("segments") or []
         sentences: list[dict[str, Any]] = []
@@ -92,5 +96,13 @@ class WhisperAdapter(Adapter):
         return {
             "transcript": transcript,
             "sentences": sentences,
-            "cost_cny": cost,
+            "cost_cny": cost_cny,
         }
+
+
+def _cost_cny_from_inference(inference_time: float | None) -> float | None:
+    """ceil(compute_s) × $0.0008 × USD_TO_CNY; None if duration unknown."""
+    if inference_time is None or inference_time < 0:
+        return None
+    billable = math.ceil(inference_time)
+    return round(billable * C.WHISPER_USD_PER_COMPUTE_SEC * USD_TO_CNY, 8)

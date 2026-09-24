@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
+from magicdub_cli import constants as C
 from magicdub_cli.adapters.base import Adapter
-from magicdub_cli.errors import INPUT_INVALID, AdapterError
+from magicdub_cli.errors import INPUT_INVALID, USD_TO_CNY, AdapterError
 from magicdub_cli.fal_api import run_model, upload_file
-from magicdub_cli.ffmpeg_util import FFmpegError, media_duration_ms, run_ffmpeg
+from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s, run_ffmpeg
 
 
 class DemucsAdapter(Adapter):
@@ -24,7 +26,7 @@ class DemucsAdapter(Adapter):
         tmp_dir.mkdir(parents=True, exist_ok=True)
         vocals_path = tmp_dir / "vocals.wav"
         url = upload_file(audio_path, api_key)
-        result, cost = run_model(
+        result, _fal_cost, _inference_time = run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,
@@ -44,12 +46,18 @@ class DemucsAdapter(Adapter):
             if not (isinstance(vocals_obj, dict) and vocals_obj.get("url")):
                 raise AdapterError("external_fatal", f"demucs missing vocals: {result}")
 
+        # Billing is audio seconds (Pricing $0.0007); ignore fal_api estimate.
+        try:
+            dur_s = audio_duration_s(audio_path)
+        except FFmpegError as exc:
+            raise AdapterError(INPUT_INVALID, f"cannot measure sep input duration: {exc}") from exc
+        cost_cny = _cost_cny_from_audio_duration(dur_s)
+
         speech = tmp_dir / "speech.wav"
         non_speech = tmp_dir / "non_speech.wav"
         # Keep vocals as speech (re-encode float32 for consistency)
         try:
             run_ffmpeg(["-i", str(vocals_path), "-c:a", "pcm_f32le", str(speech)])
-            dur_s = media_duration_ms(audio_path) / 1000.0
             # background = original + (-1 * vocals), duration matched
             filter_complex = (
                 f"[0:a]aresample=async=1,aformat=sample_fmts=fltp,apad,atrim=duration={dur_s:.6f}[o];"
@@ -73,10 +81,16 @@ class DemucsAdapter(Adapter):
                 ]
             )
         except FFmpegError as exc:
-            raise AdapterError(INPUT_INVALID, str(exc)) from exc
+            raise AdapterError(INPUT_INVALID, str(exc), cost_cny=cost_cny) from exc
 
         return {
             "speech_path": speech,
             "non_speech_path": non_speech,
-            "cost_cny": cost,
+            "cost_cny": cost_cny,
         }
+
+
+def _cost_cny_from_audio_duration(dur_s: float) -> float:
+    """ceil(audio_s) × $0.0007 × USD_TO_CNY."""
+    billable = math.ceil(dur_s)
+    return round(billable * C.DEMUCS_USD_PER_AUDIO_SEC * USD_TO_CNY, 8)

@@ -16,7 +16,7 @@ from magicdub_cli.errors import (
     fail_result,
     ok_result,
 )
-from magicdub_cli.state.io import new_ledger_id, recompute_cost_total, save_state, utc_now_iso
+from magicdub_cli.state.io import apply_adapter_cost, new_ledger_id, save_state, utc_now_iso
 
 
 def run(task_root: Path, state: dict[str, Any]) -> StepResult:
@@ -66,11 +66,7 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
             state["assets"]["sentences"] = sentences
             cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None)
-            if cost is not None:
-                state["assets"]["cost"]["cost_of_asr"] = float(
-                    state["assets"]["cost"].get("cost_of_asr") or 0
-                ) + float(cost)
-                recompute_cost_total(state)
+            apply_adapter_cost(state, "cost_of_asr", cost)
             save_state(task_root, state)
             return ok_result(adapter_id)
         except AdapterError as exc:

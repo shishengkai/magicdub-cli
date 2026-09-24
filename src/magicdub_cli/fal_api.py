@@ -45,8 +45,13 @@ def run_model(
     api_key: str,
     download_to: Path | None = None,
     result_key: str | None = None,
-) -> tuple[dict[str, Any], float | None]:
-    """Submit → poll → optional download. Returns (result_json, cost_cny_or_none)."""
+) -> tuple[dict[str, Any], float | None, float | None]:
+    """Submit → poll → optional download.
+
+    Returns ``(result_json, cost_cny_or_none, inference_time_or_none)``.
+    ``inference_time`` comes from queue status ``metrics.inference_time``
+    (fallback: result header ``x-fal-raw-time``).
+    """
     headers = _headers(api_key)
     with httpx.Client(timeout=httpx.Timeout(30.0, read=120.0)) as client:
         last_err: Exception | None = None
@@ -72,6 +77,7 @@ def run_model(
 
                 deadline = time.time() + POLL_DEADLINE_S
                 billable_units: float | None = None
+                inference_time: float | None = None
                 while time.time() < deadline:
                     st = client.get(status_url, headers=headers)
                     if st.status_code in (429, 500, 502, 503, 504):
@@ -91,6 +97,12 @@ def run_model(
                     status_body = st.json()
                     status = status_body.get("status")
                     if status == "COMPLETED":
+                        metrics = status_body.get("metrics") or {}
+                        if metrics.get("inference_time") is not None:
+                            try:
+                                inference_time = float(metrics["inference_time"])
+                            except (TypeError, ValueError):
+                                pass
                         break
                     if status in ("FAILED", "CANCELLED"):
                         raise AdapterError(
@@ -107,6 +119,13 @@ def run_model(
                         classify_http(resp.status_code),
                         f"fal result HTTP {resp.status_code}: {resp.text[:500]}",
                     )
+                if inference_time is None:
+                    raw_time = resp.headers.get("x-fal-raw-time")
+                    if raw_time:
+                        try:
+                            inference_time = float(raw_time)
+                        except ValueError:
+                            pass
                 result = resp.json()
                 if (
                     isinstance(result, dict)
@@ -132,7 +151,7 @@ def run_model(
                         raise AdapterError(EXTERNAL_FATAL, f"no download url in result: {result}")
                     _download(client, url, download_to)
 
-                return result, cost_cny
+                return result, cost_cny, inference_time
             except AdapterError as exc:
                 last_err = exc
                 if exc.code != EXTERNAL_RETRYABLE or attempt == 2:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import wave
 from pathlib import Path
 
 
@@ -34,6 +35,20 @@ def ffprobe_json(path: Path) -> dict:
     if proc.returncode != 0:
         raise FFmpegError(proc.stderr.strip() or f"ffprobe failed: {path}")
     return json.loads(proc.stdout)
+
+
+def audio_duration_s(path: Path) -> float:
+    """Audio duration in seconds. Prefer stdlib ``wave`` for ``.wav``; else ffprobe."""
+    if path.suffix.lower() == ".wav":
+        try:
+            with wave.open(str(path), "rb") as wf:
+                rate = wf.getframerate()
+                if rate <= 0:
+                    raise FFmpegError(f"invalid wav sample rate: {path}")
+                return wf.getnframes() / float(rate)
+        except wave.Error:
+            pass
+    return audio_duration_ms(path) / 1000.0
 
 
 def audio_duration_ms(path: Path) -> int:

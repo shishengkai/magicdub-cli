@@ -151,3 +151,12 @@ def recompute_cost_total(state: dict[str, Any]) -> None:
         + float(cost.get("cost_of_tts") or 0)
     )
     cost["total"] = round(total, 8)
+
+
+def apply_adapter_cost(state: dict[str, Any], bucket: str, cost_cny: float | None) -> None:
+    """Accumulate adapter ``cost_cny`` into ``assets.cost[bucket]`` and refresh total."""
+    if cost_cny is None:
+        return
+    cost = state["assets"]["cost"]
+    cost[bucket] = float(cost.get(bucket) or 0) + float(cost_cny)
+    recompute_cost_total(state)

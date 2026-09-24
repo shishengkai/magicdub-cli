@@ -7,7 +7,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 ENGINE = "magicdub-cli"
 PROGRAM_NAME = "magicdub-cli"
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 
 CNY_QUANTUM = "0.00000001"
 
@@ -22,6 +22,13 @@ ALIGNMENT_TOLERANCE_MS = 1
 # IndexTTS short reference pad (this adapter only)
 INDEX_TTS_MIN_REF_SEC = 0.5
 INDEX_TTS_PAD_TO_SEC = 0.6
+# fal IndexTTS2 public list price (USD / billable second); CNY = ceil(s) × this × USD_TO_CNY
+INDEX_TTS_USD_PER_SEC = 0.002
+# fal Whisper Pricing API rate (USD / compute second); CNY = ceil(inference_time) × this × USD_TO_CNY
+# Note: fal Usage sometimes shows $0.00125 for the same endpoint; we estimate with $0.0008 until clarified.
+WHISPER_USD_PER_COMPUTE_SEC = 0.0008
+# fal Demucs Pricing API rate (USD / audio second); CNY = ceil(input_audio_s) × this × USD_TO_CNY
+DEMUCS_USD_PER_AUDIO_SEC = 0.0007
 
 # External adapter attempts: first + 2 retries
 ADAPTER_MAX_ATTEMPTS = 3
