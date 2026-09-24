@@ -244,6 +244,4 @@ def _print_summary(task_root: Path, state: dict[str, Any]) -> None:
         f" asr={cost['cost_of_asr']}"
         f" tr={cost['cost_of_translation']}"
         f" tts={cost['cost_of_tts']}"
-        f" fit_tr={cost['cost_of_duration_fitting']['translation']}"
-        f" fit_tts={cost['cost_of_duration_fitting']['tts']}"
     )

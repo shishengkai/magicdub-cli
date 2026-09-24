@@ -108,13 +108,9 @@ def run(
             cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None, attempt)
             if cost is not None:
-                if attempt == 1:
-                    state["assets"]["cost"]["cost_of_translation"] = float(
-                        state["assets"]["cost"].get("cost_of_translation") or 0
-                    ) + float(cost)
-                else:
-                    fitting = state["assets"]["cost"]["cost_of_duration_fitting"]
-                    fitting["translation"] = float(fitting.get("translation") or 0) + float(cost)
+                state["assets"]["cost"]["cost_of_translation"] = float(
+                    state["assets"]["cost"].get("cost_of_translation") or 0
+                ) + float(cost)
                 recompute_cost_total(state)
             save_state(task_root, state)
             return ok_result(adapter_id)

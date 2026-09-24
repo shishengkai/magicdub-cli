@@ -60,13 +60,9 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
             cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None, sentence_id, attempt)
             if cost is not None:
-                if attempt == 1:
-                    state["assets"]["cost"]["cost_of_tts"] = float(
-                        state["assets"]["cost"].get("cost_of_tts") or 0
-                    ) + float(cost)
-                else:
-                    fitting = state["assets"]["cost"]["cost_of_duration_fitting"]
-                    fitting["tts"] = float(fitting.get("tts") or 0) + float(cost)
+                state["assets"]["cost"]["cost_of_tts"] = float(
+                    state["assets"]["cost"].get("cost_of_tts") or 0
+                ) + float(cost)
                 recompute_cost_total(state)
             save_state(task_root, state)
             return ok_result(adapter_id)

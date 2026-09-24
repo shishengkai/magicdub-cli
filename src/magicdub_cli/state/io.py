@@ -27,7 +27,6 @@ def empty_cost() -> dict[str, Any]:
         "cost_of_asr": 0.0,
         "cost_of_translation": 0.0,
         "cost_of_tts": 0.0,
-        "cost_of_duration_fitting": {"translation": 0.0, "tts": 0.0},
         "total": 0.0,
     }
 
@@ -145,13 +144,10 @@ def new_ledger_id() -> str:
 
 def recompute_cost_total(state: dict[str, Any]) -> None:
     cost = state["assets"]["cost"]
-    fitting = cost["cost_of_duration_fitting"]
     total = (
         float(cost.get("cost_of_sep") or 0)
         + float(cost.get("cost_of_asr") or 0)
         + float(cost.get("cost_of_translation") or 0)
         + float(cost.get("cost_of_tts") or 0)
-        + float(fitting.get("translation") or 0)
-        + float(fitting.get("tts") or 0)
     )
     cost["total"] = round(total, 8)
