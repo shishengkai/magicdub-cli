@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -22,9 +22,10 @@ from magicdub_cli.errors import (
 from magicdub_cli.fal_api import suffix_from_remote, upload_file
 from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
 
-# Apex create endpoint (not de2). Poll/download follow URLs returned by the API.
+# Apex create endpoint (not de2). URL uploads are remote jobs → get-remote, then get.
 CREATE_URL = "https://mvsep.com/api/separation/create"
 GET_URL = "https://mvsep.com/api/separation/get"
+GET_REMOTE_URL = "https://mvsep.com/api/separation/get-remote"
 
 # DnR v3 · Mel+SCNet · direct extract · include independent-model results · PCM16 WAV
 PARAMETERS = {
@@ -66,7 +67,8 @@ class MvsepDnrV3Adapter(Adapter):
         # Upload via fal CDN; MVSep fetches with remote_type=direct.
         audio_url = upload_file(audio_path, fal_key)
         job_hash = _create_job(mvsep_key, audio_url)
-        files = _poll_until_done(job_hash)
+        # URL create → remote hash; poll get-remote until done → local separation hash + files via get.
+        files = _poll_remote_then_get(job_hash)
         stems = _download_stems(files, tmp_dir)
         non_speech = _mix_music_sfx(stems["music"], stems["sfx"], tmp_dir / "non_speech.wav")
         # Local estimate: 1 credit / job × published USD/credit × FX (no Platform history lookup).
@@ -108,44 +110,88 @@ def _create_job(api_token: str, audio_url: str) -> str:
     return job_hash.strip()
 
 
-def _poll_until_done(job_hash: str) -> dict[str, dict[str, str]]:
+def _poll_remote_then_get(remote_hash: str) -> dict[str, dict[str, str]]:
+    """URL jobs: poll get-remote → final separation hash → get files from get."""
+    result_hash = _poll_status(
+        GET_REMOTE_URL,
+        remote_hash,
+        label="get-remote",
+        on_done=_remote_done_hash,
+    )
+    return _poll_status(
+        GET_URL,
+        result_hash,
+        label="get",
+        on_done=lambda body, h: _stem_files(body, h),
+    )
+
+
+def _remote_done_hash(body: dict[str, Any], remote_hash: str) -> str:
+    """get-remote done returns the real separation hash (and a link to get), not stem files."""
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+    result_hash = data.get("hash")
+    if isinstance(result_hash, str) and result_hash.strip():
+        return result_hash.strip()
+    link = data.get("link")
+    if isinstance(link, str):
+        parsed = urlparse(link)
+        if parsed.scheme == "https" and (parsed.netloc == "mvsep.com" or parsed.netloc.endswith(".mvsep.com")):
+            qs = parse_qs(parsed.query)
+            values = qs.get("hash") or []
+            if values and isinstance(values[0], str) and values[0].strip():
+                return values[0].strip()
+    raise AdapterError(
+        EXTERNAL_FATAL,
+        f"mvsep get-remote done missing result hash (remote={remote_hash}): {body}",
+    )
+
+
+def _poll_status(
+    url: str,
+    job_hash: str,
+    *,
+    label: str,
+    on_done: Any,
+) -> Any:
     deadline = time.time() + POLL_DEADLINE_S
     last_status: str | None = None
     with httpx.Client(timeout=httpx.Timeout(30.0, read=60.0)) as client:
         while time.time() < deadline:
             try:
-                resp = client.get(GET_URL, params={"hash": job_hash})
+                resp = client.get(url, params={"hash": job_hash})
             except httpx.HTTPError as exc:
-                raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep poll network: {exc}") from exc
+                raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep {label} network: {exc}") from exc
             if resp.status_code in (429, 500, 502, 503, 504):
                 time.sleep(POLL_INTERVAL_S)
                 continue
             if resp.status_code >= 400:
                 raise AdapterError(
                     classify_http(resp.status_code),
-                    f"mvsep poll HTTP {resp.status_code}: {resp.text[:500]}",
+                    f"mvsep {label} HTTP {resp.status_code}: {resp.text[:500]}",
                 )
             try:
                 body = resp.json()
             except ValueError as exc:
-                raise AdapterError(EXTERNAL_FATAL, f"mvsep poll non-json: {resp.text[:300]}") from exc
-            if not isinstance(body, dict) or not _api_ok(body.get("success")):
-                raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep poll envelope: {body}")
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} non-json: {resp.text[:300]}") from exc
+            if not isinstance(body, dict):
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} bad body: {body!r}")
             status = body.get("status")
+            if status == "not_found":
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} not_found hash={job_hash}")
+            if status == "failed":
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} failed: {body}")
+            if not _api_ok(body.get("success")):
+                raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep {label} envelope: {body}")
             if not isinstance(status, str):
-                raise AdapterError(EXTERNAL_FATAL, f"mvsep poll missing status: {body}")
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} missing status: {body}")
             if status != last_status:
                 last_status = status
             if status == "done":
-                return _stem_files(body, job_hash)
-            if status == "failed":
-                raise AdapterError(EXTERNAL_FATAL, f"mvsep job failed: {body}")
-            if status == "not_found":
-                raise AdapterError(EXTERNAL_FATAL, f"mvsep job not_found: {job_hash}")
+                return on_done(body, job_hash)
             if status not in ("waiting", "processing", "distributing", "merging"):
-                raise AdapterError(EXTERNAL_FATAL, f"mvsep unknown status {status!r}")
+                raise AdapterError(EXTERNAL_FATAL, f"mvsep {label} unknown status {status!r}")
             time.sleep(POLL_INTERVAL_S)
-    raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep poll timed out hash={job_hash}")
+    raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep {label} timed out hash={job_hash}")
 
 
 def _stem_files(body: dict[str, Any], expected_hash: str) -> dict[str, dict[str, str]]:

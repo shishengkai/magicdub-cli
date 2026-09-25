@@ -76,6 +76,32 @@ def test_mix_music_sfx(tmp_path: Path) -> None:
     assert out.stat().st_size > 0
 
 
+def test_remote_done_hash_from_data() -> None:
+    body = {
+        "success": True,
+        "status": "done",
+        "data": {
+            "hash": "final-sep-hash",
+            "link": "https://mvsep.com/api/separation/get?hash=final-sep-hash",
+        },
+    }
+    assert m._remote_done_hash(body, "remote") == "final-sep-hash"
+
+
+def test_remote_done_hash_from_link_only() -> None:
+    body = {
+        "success": True,
+        "status": "done",
+        "data": {"link": "https://mvsep.com/api/separation/get?hash=from-link"},
+    }
+    assert m._remote_done_hash(body, "remote") == "from-link"
+
+
+def test_remote_done_hash_missing_raises() -> None:
+    with pytest.raises(AdapterError):
+        m._remote_done_hash({"success": True, "status": "done", "data": {}}, "remote")
+
+
 def test_mvsep_cost_one_credit_at_zero_usd() -> None:
     # 1 credit × $0.00 × 7 = 0
     assert C.MVSEP_CREDITS_PER_JOB == 1
