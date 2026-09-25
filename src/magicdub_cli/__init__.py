@@ -1,3 +1,5 @@
 """magicdub-cli package version."""
 
-__version__ = "0.2.3"
+from magicdub_cli.constants import VERSION as __version__
+
+__all__ = ["__version__"]

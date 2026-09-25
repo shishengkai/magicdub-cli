@@ -7,7 +7,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 ENGINE = "magicdub-cli"
 PROGRAM_NAME = "magicdub-cli"
-VERSION = "0.2.4"
+VERSION = "0.2.5"
 
 CNY_QUANTUM = "0.00000001"
 
