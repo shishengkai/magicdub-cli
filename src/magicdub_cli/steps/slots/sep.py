@@ -31,11 +31,21 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
     for adapter_id in order:
         adapter = get_adapter(adapter_id)
         try:
-            api_key = require_credential(creds, "FAL_KEY")
-            out = adapter.run(
-                {"api_key": api_key, "audio_path": task_root / audio["path"]},
-                tmp,
-            )
+            if adapter_id.startswith("mvsep/"):
+                api_key = require_credential(creds, "MVSEP_API_KEY")
+                fal_key = require_credential(creds, "FAL_KEY")
+                run_inputs: dict[str, Any] = {
+                    "api_key": api_key,
+                    "fal_key": fal_key,
+                    "audio_path": task_root / audio["path"],
+                }
+            else:
+                api_key = require_credential(creds, "FAL_KEY")
+                run_inputs = {
+                    "api_key": api_key,
+                    "audio_path": task_root / audio["path"],
+                }
+            out = adapter.run(run_inputs, tmp)
             speech_tmp = Path(out["speech_path"])
             non_tmp = Path(out["non_speech_path"])
             speech_final = task_root / C.MEDIA_SRC / f"speech{speech_tmp.suffix}"

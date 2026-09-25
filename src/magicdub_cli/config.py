@@ -40,15 +40,18 @@ slots:
 _DEFAULT_CREDENTIAL_KEYS: tuple[str, ...] = (
     "FAL_KEY",
     "DEEPSEEK_API_KEY",
+    "MVSEP_API_KEY",
 )
 
 _DEFAULT_CREDENTIALS = """\
 # magicdub-cli credentials (~/.magicdub/cli/credentials)
 # KEY=value. File values win over environment variables.
 # Fill in at least FAL_KEY and DEEPSEEK_API_KEY for the default v0.1 adapters.
+# MVSEP_API_KEY is required when slots.sep includes mvsep/dnr-v3.
 
 FAL_KEY=
 DEEPSEEK_API_KEY=
+MVSEP_API_KEY=
 """
 
 
