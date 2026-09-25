@@ -41,6 +41,17 @@ POLL_DEADLINE_S = 1800.0
 STEM_TYPES = ("speech", "music", "sfx")
 
 
+def _api_ok(value: object) -> bool:
+    """MVSep may return JSON boolean true or the string \"true\"."""
+    if value is True:
+        return True
+    if isinstance(value, str) and value.strip().lower() in ("true", "1", "yes"):
+        return True
+    if value == 1:
+        return True
+    return False
+
+
 class MvsepDnrV3Adapter(Adapter):
     adapter_id = "mvsep/dnr-v3"
 
@@ -88,7 +99,7 @@ def _create_job(api_token: str, audio_url: str) -> str:
         body = resp.json()
     except ValueError as exc:
         raise AdapterError(EXTERNAL_FATAL, f"mvsep create non-json: {resp.text[:300]}") from exc
-    if not isinstance(body, dict) or body.get("success") is not True:
+    if not isinstance(body, dict) or not _api_ok(body.get("success")):
         raise AdapterError(EXTERNAL_FATAL, f"mvsep create rejected: {body}")
     data_obj = body.get("data") if isinstance(body.get("data"), dict) else {}
     job_hash = data_obj.get("hash")
@@ -118,7 +129,7 @@ def _poll_until_done(job_hash: str) -> dict[str, dict[str, str]]:
                 body = resp.json()
             except ValueError as exc:
                 raise AdapterError(EXTERNAL_FATAL, f"mvsep poll non-json: {resp.text[:300]}") from exc
-            if not isinstance(body, dict) or body.get("success") is not True:
+            if not isinstance(body, dict) or not _api_ok(body.get("success")):
                 raise AdapterError(EXTERNAL_RETRYABLE, f"mvsep poll envelope: {body}")
             status = body.get("status")
             if not isinstance(status, str):

@@ -12,6 +12,17 @@ from magicdub_cli.adapters.sep import mvsep_dnr_v3 as m
 from magicdub_cli.errors import USD_TO_CNY, AdapterError
 
 
+def test_api_ok_accepts_string_true() -> None:
+    assert m._api_ok(True) is True
+    assert m._api_ok("true") is True
+    assert m._api_ok("True") is True
+    assert m._api_ok("1") is True
+    assert m._api_ok(1) is True
+    assert m._api_ok(False) is False
+    assert m._api_ok("false") is False
+    assert m._api_ok(None) is False
+
+
 def test_ok_download_url() -> None:
     assert m._ok_download_url("https://mvsep.com/storage/foo/speech.wav") is True
     assert m._ok_download_url("https://sg.mvsep.com/storage/foo/speech.wav") is True
