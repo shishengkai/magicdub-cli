@@ -59,6 +59,24 @@ def test_stem_files_missing_raises() -> None:
         m._stem_files(body, "abc")
 
 
+def test_to_flac(tmp_path: Path) -> None:
+    def _write_silence(path: Path, frames: int = 160_000) -> None:
+        with wave.open(str(path), "wb") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(48000)
+            wf.writeframes(b"\x00\x00" * frames * 2)
+
+    wav = tmp_path / "in.wav"
+    _write_silence(wav)
+    flac = m._to_flac(wav, tmp_path / "out.flac")
+    assert flac.is_file()
+    assert flac.suffix == ".flac"
+    assert flac.stat().st_size > 0
+    # Longer PCM silence compresses; FLAC should beat raw WAV size.
+    assert flac.stat().st_size < wav.stat().st_size
+
+
 def test_mix_music_sfx(tmp_path: Path) -> None:
     def _write_silence(path: Path, frames: int = 800) -> None:
         with wave.open(str(path), "wb") as wf:

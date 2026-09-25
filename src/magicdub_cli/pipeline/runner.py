@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from magicdub_cli.errors import StepResult
+from magicdub_cli.ffmpeg_util import FFmpegError, media_duration_ms
 from magicdub_cli.state.io import recompute_cost_total, save_state, utc_now_iso
 from magicdub_cli.steps.fixed import alignment, clipping, demux, duration_fitting, mixing
 from magicdub_cli.steps.slots import asr, sep, translation, tts
@@ -286,6 +288,12 @@ def _print_summary(task_root: Path, state: dict[str, Any]) -> None:
     print(f"  video: {task_root / state['assets']['tgt']['final_video']['path']}")
     print(f"  audio: {task_root / state['assets']['tgt']['final_audio']['path']}")
     print(f"  srt:   {task_root / state['assets']['tgt']['srt']['path']}")
+    video_s = source_video_duration_s(task_root, state)
+    run_s = run_elapsed_s(state)
+    video_label = _format_duration_s(video_s) if video_s is not None else "(unknown)"
+    run_label = _format_duration_s(run_s) if run_s is not None else "(unknown)"
+    print(f"  视频时长: {video_label}")
+    print(f"  运行时长: {run_label}")
     print(f"  cost:  ¥{cost['total']:.6f} (ledger entries={len(state['ledger'])})")
     print(
         "  breakdown:"
@@ -294,3 +302,53 @@ def _print_summary(task_root: Path, state: dict[str, Any]) -> None:
         f" tr={cost['cost_of_translation']}"
         f" tts={cost['cost_of_tts']}"
     )
+
+
+def _format_duration_s(seconds: float) -> str:
+    """Human-readable duration for the finish report (e.g. ``1m 30.2s``, ``45.0s``)."""
+    if seconds < 0:
+        seconds = 0.0
+    total_ms = int(round(seconds * 1000))
+    hours, rem_ms = divmod(total_ms, 3_600_000)
+    minutes, rem_ms = divmod(rem_ms, 60_000)
+    secs = rem_ms / 1000.0
+    if hours:
+        return f"{hours}h {minutes}m {secs:.1f}s"
+    if minutes:
+        return f"{minutes}m {secs:.1f}s"
+    return f"{secs:.1f}s"
+
+
+def source_video_duration_s(task_root: Path, state: dict[str, Any]) -> float | None:
+    """Probe source media duration (video → silent_video → audio)."""
+    src = state.get("assets", {}).get("src") or {}
+    for key in ("video", "silent_video", "audio"):
+        ref = src.get(key) or {}
+        rel = ref.get("path")
+        if not rel:
+            continue
+        path = task_root / rel
+        if not path.is_file():
+            continue
+        try:
+            return media_duration_ms(path) / 1000.0
+        except FFmpegError:
+            continue
+    return None
+
+
+def run_elapsed_s(state: dict[str, Any], *, ended_at: str | None = None) -> float | None:
+    """Wall-clock seconds from task ``created_at`` to finish (or ``ended_at``)."""
+    start_raw = state.get("created_at")
+    if not start_raw:
+        return None
+    end_raw = ended_at
+    if end_raw is None:
+        finish = (state.get("run") or {}).get("steps", {}).get("finish") or {}
+        end_raw = finish.get("finished_at") or utc_now_iso()
+    try:
+        start = datetime.fromisoformat(str(start_raw))
+        end = datetime.fromisoformat(str(end_raw))
+    except ValueError:
+        return None
+    return max(0.0, (end - start).total_seconds())

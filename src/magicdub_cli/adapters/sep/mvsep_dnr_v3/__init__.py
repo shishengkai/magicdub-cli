@@ -65,8 +65,10 @@ class MvsepDnrV3Adapter(Adapter):
             raise AdapterError(INPUT_INVALID, "sep input audio missing")
 
         tmp_dir.mkdir(parents=True, exist_ok=True)
+        # Lossless FLAC shrinks demux WAV before fal CDN / MVSep size limits (free tier 100 MB).
+        flac_path = _to_flac(audio_path, tmp_dir / "input.flac")
         # Upload via fal CDN; MVSep fetches with remote_type=direct.
-        audio_url = upload_file(audio_path, fal_key)
+        audio_url = upload_file(flac_path, fal_key)
         job_hash = _create_job(mvsep_key, audio_url)
         # URL create → remote hash; poll get-remote until done → local separation hash + files via get.
         files = _poll_remote_then_get(job_hash)
@@ -256,6 +258,18 @@ def _download(client: httpx.Client, url: str, dest: Path) -> None:
             for chunk in resp.iter_bytes():
                 fh.write(chunk)
         tmp.replace(dest)
+
+
+def _to_flac(src: Path, dest: Path) -> Path:
+    """Encode slot audio to lossless FLAC for MVSep upload (size limit relief)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        run_ffmpeg(["-i", str(src), "-c:a", "flac", str(dest)])
+    except FFmpegError as exc:
+        raise AdapterError(INPUT_INVALID, f"mvsep flac encode failed: {exc}") from exc
+    if not dest.is_file() or dest.stat().st_size <= 0:
+        raise AdapterError(INPUT_INVALID, "mvsep flac encode produced empty file")
+    return dest
 
 
 def _mix_music_sfx(music: Path, sfx: Path, dest: Path) -> Path:
