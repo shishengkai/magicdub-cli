@@ -7,7 +7,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 ENGINE = "magicdub-cli"
 PROGRAM_NAME = "magicdub-cli"
-VERSION = "0.2.8"
+VERSION = "0.2.9"
 
 CNY_QUANTUM = "0.00000001"
 
@@ -29,6 +29,10 @@ INDEX_TTS_USD_PER_SEC = 0.002
 WHISPER_USD_PER_COMPUTE_SEC = 0.0008
 # fal Demucs Pricing API rate (USD / audio second); CNY = ceil(input_audio_s) × this × USD_TO_CNY
 DEMUCS_USD_PER_AUDIO_SEC = 0.0007
+# fal SAM Audio separate: $0.05 per 30s output; +$0.025/30s per additional reranking candidate
+SAM_AUDIO_USD_PER_30S = 0.05
+SAM_AUDIO_RERANK_USD_PER_30S = 0.025
+SAM_AUDIO_RERANKING_CANDIDATES = 1  # skills snapshot; no “additional” surcharge when 1
 # MVSep DnR v3: 1 credit per successful create; CNY = credits × USD/credit × USD_TO_CNY
 MVSEP_CREDITS_PER_JOB = 1
 MVSEP_USD_PER_CREDIT = 0.0  # current published credit price
@@ -37,6 +41,8 @@ FUN_ASR_CNY_PER_SEC = 0.00022
 # Bailian Qwen Audio 3.1 ASR Flash Filetrans Beijing list price (CNY / million tokens)
 QWEN31_ASR_INPUT_CNY_PER_MTOK = 0.8
 QWEN31_ASR_OUTPUT_CNY_PER_MTOK = 2.7
+# Fish Audio S2.1 Pro paid Instant clone (USD / UTF-8 byte of target text)
+FISH_S21_PRO_USD_PER_UTF8_BYTE = 0.000015
 
 # External adapter attempts: first + 2 retries
 ADAPTER_MAX_ATTEMPTS = 3

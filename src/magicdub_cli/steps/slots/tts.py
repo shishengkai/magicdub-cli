@@ -38,7 +38,12 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
     for adapter_id in order:
         adapter = get_adapter(adapter_id)
         try:
-            api_key = require_credential(creds, "FAL_KEY")
+            if adapter_id.startswith("fishaudio/"):
+                api_key = require_credential(creds, "FISH_API_KEY")
+            elif adapter_id.startswith("openrouter/"):
+                api_key = require_credential(creds, "OPENROUTER_API_KEY")
+            else:
+                api_key = require_credential(creds, "FAL_KEY")
             out = adapter.run(
                 {
                     "api_key": api_key,

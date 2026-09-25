@@ -12,18 +12,32 @@ def _load() -> dict[str, type[Adapter]]:
     )
     from magicdub_cli.adapters.asr.fal_whisper import WhisperAdapter
     from magicdub_cli.adapters.sep.fal_demucs import DemucsAdapter
+    from magicdub_cli.adapters.sep.fal_sam_audio import SamAudioAdapter
     from magicdub_cli.adapters.sep.mvsep_dnr_v3 import MvsepDnrV3Adapter
     from magicdub_cli.adapters.translation.deepseek_deepseek_flash import DeepSeekFlashAdapter
     from magicdub_cli.adapters.tts.fal_index_tts_2 import IndexTTS2Adapter
+    from magicdub_cli.adapters.tts.fishaudio_s2_1_pro import FishS21ProAdapter
+    from magicdub_cli.adapters.tts.fishaudio_s2_1_pro_free import FishS21ProFreeAdapter
+    from magicdub_cli.adapters.tts.openrouter_fish_audio_s2_1_pro import (
+        OpenRouterFishS21ProAdapter,
+    )
+    from magicdub_cli.adapters.tts.openrouter_fish_audio_s2_1_pro_free import (
+        OpenRouterFishS21ProFreeAdapter,
+    )
 
     adapters: list[type[Adapter]] = [
         DemucsAdapter,
+        SamAudioAdapter,
         MvsepDnrV3Adapter,
         WhisperAdapter,
         FunAsrAdapter,
         QwenAudio31AsrFlashFiletransAdapter,
         DeepSeekFlashAdapter,
         IndexTTS2Adapter,
+        FishS21ProFreeAdapter,
+        FishS21ProAdapter,
+        OpenRouterFishS21ProFreeAdapter,
+        OpenRouterFishS21ProAdapter,
     ]
     return {cls.adapter_id: cls for cls in adapters}
 

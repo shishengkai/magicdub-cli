@@ -134,11 +134,12 @@ wheels = [
 
 [[package]]
 name = "magicdub-cli"
-version = "0.2.8"
+version = "0.2.9"
 source = { editable = "." }
 dependencies = [
     { name = "fal-client" },
     { name = "httpx" },
+    { name = "msgpack" },
     { name = "python-ulid" },
     { name = "pyyaml" },
 ]
@@ -153,6 +154,7 @@ dev = [
 requires-dist = [
     { name = "fal-client", specifier = ">=0.5" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "msgpack", specifier = ">=1.2.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "python-ulid", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
