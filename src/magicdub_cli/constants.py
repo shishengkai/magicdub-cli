@@ -7,7 +7,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 ENGINE = "magicdub-cli"
 PROGRAM_NAME = "magicdub-cli"
-VERSION = "0.2.7"
+VERSION = "0.2.8"
 
 CNY_QUANTUM = "0.00000001"
 
@@ -32,6 +32,11 @@ DEMUCS_USD_PER_AUDIO_SEC = 0.0007
 # MVSep DnR v3: 1 credit per successful create; CNY = credits × USD/credit × USD_TO_CNY
 MVSEP_CREDITS_PER_JOB = 1
 MVSEP_USD_PER_CREDIT = 0.0  # current published credit price
+# Bailian Fun-ASR Beijing list price (CNY / content or usage second)
+FUN_ASR_CNY_PER_SEC = 0.00022
+# Bailian Qwen Audio 3.1 ASR Flash Filetrans Beijing list price (CNY / million tokens)
+QWEN31_ASR_INPUT_CNY_PER_MTOK = 0.8
+QWEN31_ASR_OUTPUT_CNY_PER_MTOK = 2.7
 
 # External adapter attempts: first + 2 retries
 ADAPTER_MAX_ATTEMPTS = 3

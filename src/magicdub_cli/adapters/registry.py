@@ -6,6 +6,10 @@ from magicdub_cli.adapters.base import Adapter
 
 
 def _load() -> dict[str, type[Adapter]]:
+    from magicdub_cli.adapters.asr.bailian_fun_asr import FunAsrAdapter
+    from magicdub_cli.adapters.asr.bailian_qwen_audio_3_1_asr_flash_filetrans import (
+        QwenAudio31AsrFlashFiletransAdapter,
+    )
     from magicdub_cli.adapters.asr.fal_whisper import WhisperAdapter
     from magicdub_cli.adapters.sep.fal_demucs import DemucsAdapter
     from magicdub_cli.adapters.sep.mvsep_dnr_v3 import MvsepDnrV3Adapter
@@ -16,6 +20,8 @@ def _load() -> dict[str, type[Adapter]]:
         DemucsAdapter,
         MvsepDnrV3Adapter,
         WhisperAdapter,
+        FunAsrAdapter,
+        QwenAudio31AsrFlashFiletransAdapter,
         DeepSeekFlashAdapter,
         IndexTTS2Adapter,
     ]

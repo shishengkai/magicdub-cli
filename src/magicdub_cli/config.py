@@ -41,6 +41,8 @@ _DEFAULT_CREDENTIAL_KEYS: tuple[str, ...] = (
     "FAL_KEY",
     "DEEPSEEK_API_KEY",
     "MVSEP_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "DASHSCOPE_HTTP_BASE_URL",
 )
 
 _DEFAULT_CREDENTIALS = """\
@@ -48,10 +50,13 @@ _DEFAULT_CREDENTIALS = """\
 # KEY=value. File values win over environment variables.
 # Fill in at least FAL_KEY and DEEPSEEK_API_KEY for the default v0.1 adapters.
 # MVSEP_API_KEY is required when slots.sep includes mvsep/dnr-v3.
+# DASHSCOPE_API_KEY (+ optional DASHSCOPE_HTTP_BASE_URL) for bailian ASR adapters.
 
 FAL_KEY=
 DEEPSEEK_API_KEY=
 MVSEP_API_KEY=
+DASHSCOPE_API_KEY=
+DASHSCOPE_HTTP_BASE_URL=
 """
 
 
@@ -210,6 +215,7 @@ def load_credentials(path: Path | None = None) -> dict[str, str]:
         "FAL_KEY",
         "DEEPSEEK_API_KEY",
         "DASHSCOPE_API_KEY",
+        "DASHSCOPE_HTTP_BASE_URL",
         "FISH_API_KEY",
         "OPENROUTER_API_KEY",
         "MVSEP_API_KEY",

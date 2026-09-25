@@ -30,15 +30,25 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
     for adapter_id in order:
         adapter = get_adapter(adapter_id)
         try:
-            api_key = require_credential(creds, "FAL_KEY")
-            out = adapter.run(
-                {
+            if adapter_id.startswith("bailian/"):
+                api_key = require_credential(creds, "DASHSCOPE_API_KEY")
+                fal_key = require_credential(creds, "FAL_KEY")
+                base_url = (creds.get("DASHSCOPE_HTTP_BASE_URL") or "").strip() or None
+                run_inputs: dict[str, Any] = {
+                    "api_key": api_key,
+                    "fal_key": fal_key,
+                    "base_url": base_url,
+                    "speech_path": task_root / speech["path"],
+                    "language": state["assets"]["src"]["language"],
+                }
+            else:
+                api_key = require_credential(creds, "FAL_KEY")
+                run_inputs = {
                     "api_key": api_key,
                     "speech_path": task_root / speech["path"],
                     "language": state["assets"]["src"]["language"],
-                },
-                tmp,
-            )
+                }
+            out = adapter.run(run_inputs, tmp)
             raw_sentences = out.get("sentences") or []
             if not raw_sentences:
                 return fail_result(INPUT_INVALID, "ASR returned 0 sentences")
