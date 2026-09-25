@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--src", required=True, help="Source language code (e.g. en).")
     run.add_argument("--tgt", required=True, help="Target language code (e.g. zh-Hans).")
 
+    sub.add_parser(
+        "config",
+        help="Interactively choose adapters for translation / sep / asr / tts slots.",
+    )
+
     update = sub.add_parser(
         "update",
         help="Reinstall this tool from GitHub via uv (upgrade / refresh).",
@@ -64,6 +69,11 @@ def main(argv: list[str] | None = None) -> int:
         from magicdub_cli.pipeline.runner import run_pipeline
 
         return run_pipeline(video=args.video, src_lang=args.src, tgt_lang=args.tgt)
+
+    if args.command == "config":
+        from magicdub_cli.configure import run_config
+
+        return run_config()
 
     if args.command == "update":
         from magicdub_cli.self_update import run_update

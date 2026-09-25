@@ -14,6 +14,7 @@ from magicdub_cli.fal_api import run_model, upload_file
 
 class WhisperAdapter(Adapter):
     adapter_id = "fal/whisper"
+    slot = "asr"
     endpoint = "fal-ai/whisper"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

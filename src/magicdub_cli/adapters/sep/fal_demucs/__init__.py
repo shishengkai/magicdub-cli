@@ -15,6 +15,7 @@ from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s, run_ffmpeg
 
 class DemucsAdapter(Adapter):
     adapter_id = "fal/demucs"
+    slot = "sep"
     endpoint = "fal-ai/demucs"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

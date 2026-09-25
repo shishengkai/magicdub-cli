@@ -118,6 +118,7 @@ def build_messages(
 
 class DeepSeekFlashAdapter(Adapter):
     adapter_id = "deepseek/deepseek-flash"
+    slot = "translation"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:
         api_key = inputs["api_key"]

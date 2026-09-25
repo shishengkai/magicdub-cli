@@ -17,6 +17,7 @@ from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s, run_ffmpeg
 
 class IndexTTS2Adapter(Adapter):
     adapter_id = "fal/index-tts-2"
+    slot = "tts"
     endpoint = "fal-ai/index-tts-2/text-to-speech"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

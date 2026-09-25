@@ -263,6 +263,48 @@ def _merge_slots(raw: dict[str, Any] | None) -> dict[str, list[str]]:
     return slots
 
 
+def _format_slots_block(slots: dict[str, list[str]]) -> str:
+    """Render a top-level ``slots:`` block (flow-style single-item lists)."""
+    lines = ["slots:"]
+    for name in C.SLOT_DEFAULTS:
+        ids = slots.get(name) or list(C.SLOT_DEFAULTS[name])
+        inner = ", ".join(str(x) for x in ids)
+        lines.append(f"  {name}: [{inner}]")
+    return "\n".join(lines) + "\n"
+
+
+def update_slots_in_config_file(
+    slots: dict[str, list[str]],
+    path: Path | None = None,
+) -> None:
+    """Replace only the top-level ``slots`` mapping in ``config.yaml``.
+
+    Preserves other keys and comments outside the slots block. Creates the file
+    from the default template when missing.
+    """
+    path = path or (C.cli_config_dir() / C.CONFIG_FILENAME)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.is_file():
+        path.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
+
+    text = path.read_text(encoding="utf-8")
+    # Normalize newlines for matching; rewrite with ``\n``.
+    text = text.replace("\r\n", "\n")
+    block = _format_slots_block(slots)
+    pattern = re.compile(
+        r"(?m)^slots:\n(?:[ \t]+.+\n)*",
+    )
+    if pattern.search(text):
+        new_text = pattern.sub(block, text, count=1)
+    else:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        if text and not text.endswith("\n\n"):
+            text += "\n"
+        new_text = text + block
+    path.write_text(new_text, encoding="utf-8")
+
+
 def load_config(path: Path | None = None) -> dict[str, Any]:
     """Return effective config: file overlays constants; missing keys use defaults."""
     path = path or (C.cli_config_dir() / C.CONFIG_FILENAME)

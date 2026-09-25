@@ -11,6 +11,7 @@ from magicdub_cli.fish_tts import instant_clone
 
 class FishS21ProFreeAdapter(Adapter):
     adapter_id = "fishaudio/s2.1-pro-free"
+    slot = "tts"
     model = "s2.1-pro-free"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

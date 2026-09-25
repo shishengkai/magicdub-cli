@@ -55,6 +55,7 @@ def _api_ok(value: object) -> bool:
 
 class MvsepDnrV3Adapter(Adapter):
     adapter_id = "mvsep/dnr-v3"
+    slot = "sep"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:
         mvsep_key = inputs["api_key"]

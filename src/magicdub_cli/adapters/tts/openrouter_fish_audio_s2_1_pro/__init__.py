@@ -13,6 +13,7 @@ from magicdub_cli.openrouter_tts import instant_clone
 
 class OpenRouterFishS21ProAdapter(Adapter):
     adapter_id = "openrouter/fish-audio/s2.1-pro"
+    slot = "tts"
     model = "fish-audio/s2.1-pro"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

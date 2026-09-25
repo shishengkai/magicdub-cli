@@ -11,6 +11,7 @@ class Adapter(ABC):
     """External capability behind a slot."""
 
     adapter_id: str
+    slot: str  # sep | asr | translation | tts
 
     @abstractmethod
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

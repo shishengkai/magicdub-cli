@@ -24,6 +24,7 @@ from magicdub_cli.fal_api import upload_file
 
 class FunAsrAdapter(Adapter):
     adapter_id = "bailian/fun-asr"
+    slot = "asr"
     model = "fun-asr"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

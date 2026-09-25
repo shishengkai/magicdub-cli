@@ -45,18 +45,24 @@ def _load() -> dict[str, type[Adapter]]:
 _REGISTRY: dict[str, type[Adapter]] | None = None
 
 
-def get_adapter(adapter_id: str) -> Adapter:
+def _registry() -> dict[str, type[Adapter]]:
     global _REGISTRY
     if _REGISTRY is None:
         _REGISTRY = _load()
-    cls = _REGISTRY.get(adapter_id)
+    return _REGISTRY
+
+
+def get_adapter(adapter_id: str) -> Adapter:
+    cls = _registry().get(adapter_id)
     if cls is None:
         raise KeyError(f"unknown adapter_id: {adapter_id}")
     return cls()
 
 
 def known_adapter_ids() -> list[str]:
-    global _REGISTRY
-    if _REGISTRY is None:
-        _REGISTRY = _load()
-    return sorted(_REGISTRY)
+    return sorted(_registry())
+
+
+def adapter_ids_for_slot(slot: str) -> list[str]:
+    """Registered adapter_ids for a pipeline slot, sorted."""
+    return sorted(aid for aid, cls in _registry().items() if cls.slot == slot)

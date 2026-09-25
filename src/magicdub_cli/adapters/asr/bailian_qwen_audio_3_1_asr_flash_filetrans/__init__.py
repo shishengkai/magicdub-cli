@@ -24,6 +24,7 @@ from magicdub_cli.fal_api import upload_file
 
 class QwenAudio31AsrFlashFiletransAdapter(Adapter):
     adapter_id = "bailian/qwen-audio-3.1-asr-flash-filetrans"
+    slot = "asr"
     model = "qwen-audio-3.1-asr-flash-filetrans"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:

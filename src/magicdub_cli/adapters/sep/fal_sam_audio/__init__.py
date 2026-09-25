@@ -24,6 +24,7 @@ from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s
 
 class SamAudioAdapter(Adapter):
     adapter_id = "fal/sam-audio"
+    slot = "sep"
     endpoint = "fal-ai/sam-audio/separate"
 
     def run(self, inputs: dict[str, Any], tmp_dir: Path) -> dict[str, Any]:
