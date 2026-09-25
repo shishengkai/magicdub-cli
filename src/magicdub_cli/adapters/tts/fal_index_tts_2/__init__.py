@@ -28,8 +28,8 @@ class IndexTTS2Adapter(Adapter):
 
         ref = _maybe_pad_reference(ref_path, tmp_dir, source_text=source_text)
         url = upload_file(ref, api_key)
-        out = tmp_dir / "tts.wav"
-        run_model(
+        # Stem only; run_model renames suffix from remote URL／content_type (often .mp3).
+        _result, _fal_cost, _inference_time, out = run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,
@@ -37,19 +37,14 @@ class IndexTTS2Adapter(Adapter):
                 "prompt": text,
             },
             api_key=api_key,
-            download_to=out,
+            download_to=tmp_dir / "tts",
             result_key="audio",
         )
-        if not out.is_file():
+        if out is None or not out.is_file():
             raise AdapterError("external_fatal", "index-tts-2 produced no audio")
-        # Billing is local: ignore fal_api estimate; measure generated audio.
+        # Billing is local: ignore fal_api estimate; measure generated audio as downloaded.
         cost_cny = _cost_cny_from_generated(out)
-        final = tmp_dir / "tts_f32.wav"
-        try:
-            run_ffmpeg(["-i", str(out), "-c:a", "pcm_f32le", str(final)])
-        except FFmpegError as exc:
-            raise AdapterError(INPUT_INVALID, str(exc), cost_cny=cost_cny) from exc
-        return {"audio_path": final, "cost_cny": cost_cny}
+        return {"audio_path": out, "cost_cny": cost_cny}
 
 
 def _cost_cny_from_generated(path: Path) -> float:

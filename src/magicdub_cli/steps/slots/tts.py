@@ -48,14 +48,15 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
                 },
                 tmp,
             )
+            audio_tmp = Path(out["audio_path"])
             final = (
                 task_root
                 / C.MEDIA_SENTENCES
                 / str(sentence_id)
                 / "tgt"
-                / f"attempt_{attempt}.wav"
+                / f"attempt_{attempt}{audio_tmp.suffix}"
             )
-            commit(Path(out["audio_path"]), final)
+            commit(audio_tmp, final)
             tgt["audio"] = file_ref(final, relative_to=task_root)
             cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None, sentence_id, attempt)

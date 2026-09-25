@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -13,15 +15,21 @@ from magicdub_cli.adapters.base import Adapter
 from magicdub_cli.errors import (
     EXTERNAL_FATAL,
     EXTERNAL_RETRYABLE,
-    USD_TO_CNY,
     AdapterError,
     classify_http,
 )
 
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
-# Approximate Flash rates USD / 1M tokens (input/output); refine via usage if priced later.
-USD_PER_M_INPUT = 0.14
-USD_PER_M_OUTPUT = 0.28
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+# deepseek-flash CNY / 1M tokens — https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+# Peak: Beijing Mon–Fri 09:00–12:00 & 14:00–18:00 (excl. statutory holidays; see _is_peak).
+# Idle = half of peak. Response has no money field; bill from usage tokens.
+_CNY_PER_M_PEAK = {
+    "cache_hit": 0.04,
+    "cache_miss": 2.0,
+    "output": 8.0,
+}
 
 _SYSTEM_BASE = (
     "You are a professional audiovisual translator for dubbing. "
@@ -185,10 +193,52 @@ def _parse_translations(content: str) -> list[dict[str, Any]]:
     return out
 
 
-def _cost_from_usage(usage: dict[str, Any]) -> float | None:
-    pin = usage.get("prompt_tokens")
+def _is_peak(*, now: datetime | None = None) -> bool:
+    """Peak window in Asia/Shanghai; weekends are idle.
+
+    Statutory holidays are all-day idle on DeepSeek's page; this helper does
+    not load a holiday calendar, so holiday weekday peak hours may overestimate.
+    """
+    dt = now.astimezone(_SHANGHAI) if now is not None else datetime.now(_SHANGHAI)
+    if dt.weekday() >= 5:
+        return False
+    minutes = dt.hour * 60 + dt.minute
+    return (9 * 60 <= minutes < 12 * 60) or (14 * 60 <= minutes < 18 * 60)
+
+
+def _rates_cny_per_m(*, now: datetime | None = None) -> dict[str, float]:
+    peak = _is_peak(now=now)
+    scale = 1.0 if peak else 0.5
+    return {k: v * scale for k, v in _CNY_PER_M_PEAK.items()}
+
+
+def _cost_from_usage(
+    usage: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> float | None:
+    """Estimate CNY from usage; API does not return a spend field.
+
+    Uses ``prompt_cache_hit_tokens`` / ``prompt_cache_miss_tokens`` when present;
+    otherwise treats all ``prompt_tokens`` as cache miss. ``completion_tokens``
+    (including reasoning) billed as output.
+    """
     cout = usage.get("completion_tokens")
-    if pin is None or cout is None:
+    if cout is None:
         return None
-    usd = (int(pin) / 1_000_000) * USD_PER_M_INPUT + (int(cout) / 1_000_000) * USD_PER_M_OUTPUT
-    return round(usd * USD_TO_CNY, 8)
+    hit = usage.get("prompt_cache_hit_tokens")
+    miss = usage.get("prompt_cache_miss_tokens")
+    if hit is None or miss is None:
+        pin = usage.get("prompt_tokens")
+        if pin is None:
+            return None
+        hit_i, miss_i = 0, int(pin)
+    else:
+        hit_i, miss_i = int(hit), int(miss)
+    rates = _rates_cny_per_m(now=now)
+    cny = (
+        (hit_i / 1_000_000) * rates["cache_hit"]
+        + (miss_i / 1_000_000) * rates["cache_miss"]
+        + (int(cout) / 1_000_000) * rates["output"]
+    )
+    return round(cny, 8)

@@ -8,9 +8,8 @@ from typing import Any
 
 from magicdub_cli import constants as C
 from magicdub_cli.adapters.base import Adapter
-from magicdub_cli.errors import INPUT_INVALID, USD_TO_CNY, AdapterError
+from magicdub_cli.errors import USD_TO_CNY
 from magicdub_cli.fal_api import run_model, upload_file
-from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
 
 
 class WhisperAdapter(Adapter):
@@ -22,30 +21,14 @@ class WhisperAdapter(Adapter):
         speech_path = Path(inputs["speech_path"])
         language = inputs.get("language")  # e.g. en — whisper accepts null for auto
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        asr_wav = tmp_dir / "asr_16k_mono.wav"
-        try:
-            run_ffmpeg(
-                [
-                    "-i",
-                    str(speech_path),
-                    "-ac",
-                    "1",
-                    "-ar",
-                    "16000",
-                    "-c:a",
-                    "pcm_s16le",
-                    str(asr_wav),
-                ]
-            )
-        except FFmpegError as exc:
-            raise AdapterError(INPUT_INVALID, str(exc)) from exc
 
-        url = upload_file(asr_wav, api_key)
+        # Upload as-is; fal Whisper accepts mp3/mp4/mpeg/mpga/m4a/wav/webm (no local transcode).
+        url = upload_file(speech_path, api_key)
         lang_param = None
         if language:
             # fal whisper uses short codes like "en"
             lang_param = language.split("-")[0]
-        result, _fal_cost, inference_time = run_model(
+        result, _fal_cost, inference_time, _downloaded = run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,

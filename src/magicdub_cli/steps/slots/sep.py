@@ -36,10 +36,12 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
                 {"api_key": api_key, "audio_path": task_root / audio["path"]},
                 tmp,
             )
-            speech_final = task_root / C.MEDIA_SRC / "speech.wav"
-            non_final = task_root / C.MEDIA_SRC / "non_speech.wav"
-            commit(Path(out["speech_path"]), speech_final)
-            commit(Path(out["non_speech_path"]), non_final)
+            speech_tmp = Path(out["speech_path"])
+            non_tmp = Path(out["non_speech_path"])
+            speech_final = task_root / C.MEDIA_SRC / f"speech{speech_tmp.suffix}"
+            non_final = task_root / C.MEDIA_SRC / f"non_speech{non_tmp.suffix}"
+            commit(speech_tmp, speech_final)
+            commit(non_tmp, non_final)
             state["assets"]["src"]["speech"] = file_ref(speech_final, relative_to=task_root)
             state["assets"]["src"]["non_speech"] = file_ref(non_final, relative_to=task_root)
             cost = out.get("cost_cny")

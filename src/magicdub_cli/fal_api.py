@@ -6,6 +6,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import fal_client
 import httpx
@@ -23,6 +24,31 @@ API_BASE = "https://api.fal.ai"
 POLL_INTERVAL_S = 5.0
 POLL_DEADLINE_S = 1800.0
 
+_KNOWN_AUDIO_SUFFIXES = {
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".m4a",
+    ".aac",
+    ".flac",
+    ".webm",
+    ".mp4",
+    ".mpeg",
+    ".mpga",
+}
+_CONTENT_TYPE_SUFFIX = {
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/ogg": ".ogg",
+    "audio/flac": ".flac",
+    "audio/mp4": ".m4a",
+    "audio/aac": ".aac",
+    "audio/webm": ".webm",
+}
+
 
 def _headers(api_key: str) -> dict[str, str]:
     return {
@@ -38,6 +64,25 @@ def upload_file(path: Path, api_key: str) -> str:
     return fal_client.upload_file(str(path))
 
 
+def suffix_from_remote(*, url: str, file_obj: dict[str, Any] | None = None) -> str:
+    """Pick a file suffix from fal File metadata or the download URL path."""
+    if file_obj:
+        for key in ("file_name", "fileName", "filename"):
+            name = file_obj.get(key)
+            if name:
+                suf = Path(str(name)).suffix.lower()
+                if suf in _KNOWN_AUDIO_SUFFIXES:
+                    return suf
+        ct = str(file_obj.get("content_type") or file_obj.get("contentType") or "").lower()
+        if ct in _CONTENT_TYPE_SUFFIX:
+            return _CONTENT_TYPE_SUFFIX[ct]
+    path = unquote(urlparse(url).path)
+    suf = Path(path).suffix.lower()
+    if suf in _KNOWN_AUDIO_SUFFIXES:
+        return suf
+    return ".bin"
+
+
 def run_model(
     *,
     endpoint: str,
@@ -45,10 +90,12 @@ def run_model(
     api_key: str,
     download_to: Path | None = None,
     result_key: str | None = None,
-) -> tuple[dict[str, Any], float | None, float | None]:
+) -> tuple[dict[str, Any], float | None, float | None, Path | None]:
     """Submit → poll → optional download.
 
-    Returns ``(result_json, cost_cny_or_none, inference_time_or_none)``.
+    Returns ``(result_json, cost_cny_or_none, inference_time_or_none, downloaded_path)``.
+    When ``download_to`` is set, the file is saved with the remote URL／metadata
+    suffix (stem taken from ``download_to``); ``downloaded_path`` is that path.
     ``inference_time`` comes from queue status ``metrics.inference_time``
     (fallback: result header ``x-fal-raw-time``).
     """
@@ -138,20 +185,24 @@ def run_model(
                     client, headers, endpoint, request_id, billable_units, result
                 )
 
+                downloaded: Path | None = None
                 if download_to is not None:
                     obj = result.get(result_key) if result_key else result
                     url = obj["url"] if isinstance(obj, dict) else None
+                    file_obj = obj if isinstance(obj, dict) else None
                     if not url and isinstance(result, dict):
-                        # try common keys
                         for key in ("audio", "vocals", "image"):
                             if isinstance(result.get(key), dict) and result[key].get("url"):
+                                file_obj = result[key]
                                 url = result[key]["url"]
                                 break
                     if not url:
                         raise AdapterError(EXTERNAL_FATAL, f"no download url in result: {result}")
-                    _download(client, url, download_to)
+                    suf = suffix_from_remote(url=url, file_obj=file_obj)
+                    downloaded = download_to.with_suffix(suf)
+                    _download(client, url, downloaded)
 
-                return result, cost_cny, inference_time
+                return result, cost_cny, inference_time, downloaded
             except AdapterError as exc:
                 last_err = exc
                 if exc.code != EXTERNAL_RETRYABLE or attempt == 2:

@@ -24,9 +24,9 @@ class DemucsAdapter(Adapter):
             raise AdapterError(INPUT_INVALID, "sep input audio missing")
 
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        vocals_path = tmp_dir / "vocals.wav"
+        speech = tmp_dir / "speech"
         url = upload_file(audio_path, api_key)
-        result, _fal_cost, _inference_time = run_model(
+        result, _fal_cost, _inference_time, downloaded = run_model(
             endpoint=self.endpoint,
             payload={
                 "audio_url": url,
@@ -34,14 +34,15 @@ class DemucsAdapter(Adapter):
                 "stems": ["vocals"],
                 "shifts": 1,
                 "overlap": 0.25,
-                "output_format": "wav",
+                "output_format": "wav",  # highest quality among fal options (wav|mp3)
             },
             api_key=api_key,
-            download_to=vocals_path,
+            download_to=speech,
             result_key="vocals",
         )
-        if not vocals_path.is_file():
-            # response may nest differently
+        if downloaded is not None:
+            speech = downloaded
+        if not speech.is_file():
             vocals_obj = result.get("vocals") if isinstance(result, dict) else None
             if not (isinstance(vocals_obj, dict) and vocals_obj.get("url")):
                 raise AdapterError("external_fatal", f"demucs missing vocals: {result}")
@@ -53,12 +54,9 @@ class DemucsAdapter(Adapter):
             raise AdapterError(INPUT_INVALID, f"cannot measure sep input duration: {exc}") from exc
         cost_cny = _cost_cny_from_audio_duration(dur_s)
 
-        speech = tmp_dir / "speech.wav"
+        # Derive background stem (product of sep), not a format conversion for ASR/etc.
         non_speech = tmp_dir / "non_speech.wav"
-        # Keep vocals as speech (re-encode float32 for consistency)
         try:
-            run_ffmpeg(["-i", str(vocals_path), "-c:a", "pcm_f32le", str(speech)])
-            # background = original + (-1 * vocals), duration matched
             filter_complex = (
                 f"[0:a]aresample=async=1,aformat=sample_fmts=fltp,apad,atrim=duration={dur_s:.6f}[o];"
                 f"[1:a]aresample=async=1,aformat=sample_fmts=fltp,volume=-1.0,"
