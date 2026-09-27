@@ -17,8 +17,8 @@ _BACK = "__back__"
 
 # Menu order: translation → sep → asr → tts → done (per product spec).
 _SLOT_MENU: tuple[tuple[str, str], ...] = (
-    ("translation", "翻译模型"),
-    ("sep", "声音分离模型"),
+    ("translation", "语音翻译模型"),
+    ("sep", "语音分离模型"),
     ("asr", "语音识别模型"),
     ("tts", "语音合成模型"),
 )
