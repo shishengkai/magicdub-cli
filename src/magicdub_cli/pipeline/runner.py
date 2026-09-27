@@ -15,6 +15,7 @@ from typing import Any
 
 from magicdub_cli.errors import StepResult
 from magicdub_cli.ffmpeg_util import FFmpegError, media_duration_ms
+from magicdub_cli.media.files import resolve_asset_path
 from magicdub_cli.state.io import recompute_cost_total, save_state, utc_now_iso
 from magicdub_cli.steps.fixed import alignment, clipping, demux, duration_fitting, mixing
 from magicdub_cli.steps.slots import asr, sep, translation, tts
@@ -67,9 +68,15 @@ def run_pipeline(*, video: str, src_lang: str, tgt_lang: str) -> int:
 
         _mark_step(state, "finish", "running")
         final = state["assets"]["tgt"]
-        for key in ("final_video", "final_audio", "srt"):
+        for key in ("final_video", "srt"):
             ref = final.get(key) or {}
-            if not ref.get("path") or not (task_root / ref["path"]).is_file():
+            if not ref.get("path"):
+                return _fail(task_root, state, "finish", "input_invalid", f"missing {key}")
+            try:
+                path = resolve_asset_path(task_root, ref)
+            except ValueError:
+                return _fail(task_root, state, "finish", "input_invalid", f"missing {key}")
+            if not path.is_file():
                 return _fail(task_root, state, "finish", "input_invalid", f"missing {key}")
         if len(state["assets"]["sentences"]) == 0:
             return _fail(task_root, state, "finish", "input_invalid", "no sentences")
@@ -284,10 +291,11 @@ def _fail(
 
 def _print_summary(task_root: Path, state: dict[str, Any]) -> None:
     cost = state["assets"]["cost"]
+    video_ref = state["assets"]["tgt"]["final_video"]
+    srt_ref = state["assets"]["tgt"]["srt"]
     print("done")
-    print(f"  video: {task_root / state['assets']['tgt']['final_video']['path']}")
-    print(f"  audio: {task_root / state['assets']['tgt']['final_audio']['path']}")
-    print(f"  srt:   {task_root / state['assets']['tgt']['srt']['path']}")
+    print(f"  video: {resolve_asset_path(task_root, video_ref)}")
+    print(f"  srt:   {resolve_asset_path(task_root, srt_ref)}")
     video_s = source_video_duration_s(task_root, state)
     run_s = run_elapsed_s(state)
     video_label = _format_duration_s(video_s) if video_s is not None else "(unknown)"

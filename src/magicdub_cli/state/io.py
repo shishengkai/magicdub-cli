@@ -99,12 +99,13 @@ def new_state(
                 "speech": empty_file_ref(),
                 "non_speech": empty_file_ref(),
                 "transcript": None,
+                "input_path": None,
             },
             "sentences": [],
             "tgt": {
                 "language": tgt_language,
                 "final_video": empty_file_ref(),
-                "final_audio": empty_file_ref(),
+                "final_audio": empty_file_ref(),  # no longer delivered; kept empty for schema
                 "srt": empty_file_ref(),
             },
             "cost": empty_cost(),

@@ -20,22 +20,47 @@ from magicdub_cli.errors import (
     classify_http,
 )
 from magicdub_cli.fal_api import suffix_from_remote, upload_file
-from magicdub_cli.ffmpeg_util import FFmpegError, run_ffmpeg
+from magicdub_cli.ffmpeg_util import FFmpegError, audio_duration_s, ffprobe_json, run_ffmpeg
 
 # Apex create endpoint (not de2). URL uploads are remote jobs → get-remote, then get.
 CREATE_URL = "https://mvsep.com/api/separation/create"
 GET_URL = "https://mvsep.com/api/separation/get"
 GET_REMOTE_URL = "https://mvsep.com/api/separation/get-remote"
 
-# DnR v3 · Mel+SCNet · direct extract · include independent-model results · PCM16 WAV
+# DnR v3 · Mel+SCNet · direct extract · include independent-model results.
+# output_format is chosen per input (see choose_output_format).
 PARAMETERS = {
     "sep_type": "56",
     "add_opt1": "2",
     "add_opt2": "0",
     "add_opt3": "1",
-    "output_format": "1",
     "is_demo": "0",
 }
+
+# Premium output_format values (quality ≥ input, prefer smaller).
+OUTPUT_MP3_320 = "0"
+OUTPUT_WAV_16 = "1"
+OUTPUT_FLAC_16 = "2"
+OUTPUT_M4A = "3"
+OUTPUT_WAV_32 = "4"
+OUTPUT_FLAC_24 = "5"
+
+_LOSSY_CODECS = frozenset(
+    {
+        "mp3",
+        "mp2",
+        "aac",
+        "opus",
+        "vorbis",
+        "ac3",
+        "eac3",
+        "wma",
+        "wmav2",
+        "cook",
+        "atrac3",
+        "atrac3p",
+    }
+)
 
 POLL_INTERVAL_S = 15.0
 POLL_DEADLINE_S = 1800.0
@@ -53,6 +78,62 @@ def _api_ok(value: object) -> bool:
     return False
 
 
+def choose_output_format(audio_path: Path) -> str:
+    """Pick MVSep ``output_format`` from input audio (not lower quality; prefer smaller)."""
+    try:
+        probe = ffprobe_json(audio_path)
+    except FFmpegError:
+        return OUTPUT_FLAC_16
+    for stream in probe.get("streams") or []:
+        if stream.get("codec_type") == "audio":
+            return choose_output_format_from_stream(stream)
+    return OUTPUT_FLAC_16
+
+
+def choose_output_format_from_stream(stream: dict[str, Any]) -> str:
+    """Map one ffprobe audio stream to MVSep ``output_format`` string."""
+    codec = str(stream.get("codec_name") or "").lower()
+    if codec == "mp3":
+        return OUTPUT_MP3_320
+    if codec in _LOSSY_CODECS:
+        return OUTPUT_M4A
+
+    bits, is_float = _effective_bit_depth(stream)
+    if is_float or (bits is not None and bits >= 32):
+        return OUTPUT_WAV_32
+    if bits is not None and bits >= 24:
+        return OUTPUT_FLAC_24
+    # Lossless ≤16 bit, or unknown lossless / PCM → flac 16 (not giant wav 16).
+    return OUTPUT_FLAC_16
+
+
+def _effective_bit_depth(stream: dict[str, Any]) -> tuple[int | None, bool]:
+    """Return (bits, is_float) from sample_fmt / bits_per_* fields."""
+    fmt = str(stream.get("sample_fmt") or "").lower()
+    if fmt in ("flt", "fltp", "dbl", "dblp"):
+        return 32, True
+    if fmt.startswith("s16"):
+        return 16, False
+    if fmt.startswith("s24"):
+        return 24, False
+    if fmt.startswith("s32") or fmt.startswith("s64"):
+        return 32, False
+    if fmt.startswith("u8"):
+        return 8, False
+
+    for key in ("bits_per_raw_sample", "bits_per_sample"):
+        raw = stream.get(key)
+        if raw in (None, "", 0, "0"):
+            continue
+        try:
+            bits = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if bits > 0:
+            return bits, False
+    return None, False
+
+
 class MvsepDnrV3Adapter(Adapter):
     adapter_id = "mvsep/dnr-v3"
     slot = "sep"
@@ -65,17 +146,21 @@ class MvsepDnrV3Adapter(Adapter):
             raise AdapterError(INPUT_INVALID, "sep input audio missing")
 
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        # Lossless FLAC shrinks demux WAV before fal CDN / MVSep size limits (free tier 100 MB).
-        flac_path = _to_flac(audio_path, tmp_dir / "input.flac")
-        # Upload via fal CDN; MVSep fetches with remote_type=direct.
-        audio_url = upload_file(flac_path, fal_key)
-        job_hash = _create_job(mvsep_key, audio_url)
+        output_format = choose_output_format(audio_path)
+        # Upload slot audio as-is via fal CDN; MVSep fetches with remote_type=direct.
+        audio_url = upload_file(audio_path, fal_key)
+        job_hash = _create_job(mvsep_key, audio_url, output_format=output_format)
         # URL create → remote hash; poll get-remote until done → local separation hash + files via get.
         files = _poll_remote_then_get(job_hash)
         stems = _download_stems(files, tmp_dir)
         non_speech = _mix_music_sfx(stems["music"], stems["sfx"], tmp_dir / "non_speech.wav")
-        # Local estimate: 1 credit / job × published USD/credit × FX (no Platform history lookup).
-        cost_cny = _cost_cny_from_credits(C.MVSEP_CREDITS_PER_JOB)
+        try:
+            dur_s = audio_duration_s(audio_path)
+        except FFmpegError as exc:
+            raise AdapterError(INPUT_INVALID, f"cannot measure sep input duration: {exc}") from exc
+        credits = credits_from_duration_s(dur_s)
+        # Local estimate: floor(audio_s/60) credits × USD/credit × FX (no Platform history lookup).
+        cost_cny = _cost_cny_from_credits(credits)
         return {
             "speech_path": stems["speech"],
             "non_speech_path": non_speech,
@@ -83,9 +168,10 @@ class MvsepDnrV3Adapter(Adapter):
         }
 
 
-def _create_job(api_token: str, audio_url: str) -> str:
+def _create_job(api_token: str, audio_url: str, *, output_format: str) -> str:
     data = {
         **PARAMETERS,
+        "output_format": output_format,
         "api_token": api_token,
         "url": audio_url,
         "remote_type": "direct",
@@ -260,18 +346,6 @@ def _download(client: httpx.Client, url: str, dest: Path) -> None:
         tmp.replace(dest)
 
 
-def _to_flac(src: Path, dest: Path) -> Path:
-    """Encode slot audio to lossless FLAC for MVSep upload (size limit relief)."""
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        run_ffmpeg(["-i", str(src), "-c:a", "flac", str(dest)])
-    except FFmpegError as exc:
-        raise AdapterError(INPUT_INVALID, f"mvsep flac encode failed: {exc}") from exc
-    if not dest.is_file() or dest.stat().st_size <= 0:
-        raise AdapterError(INPUT_INVALID, "mvsep flac encode produced empty file")
-    return dest
-
-
 def _mix_music_sfx(music: Path, sfx: Path, dest: Path) -> Path:
     """Adapter-local non_speech = music + sfx (not a format conversion for the next slot)."""
     try:
@@ -293,6 +367,13 @@ def _mix_music_sfx(music: Path, sfx: Path, dest: Path) -> Path:
     except FFmpegError as exc:
         raise AdapterError(INPUT_INVALID, f"mvsep music+sfx mix failed: {exc}") from exc
     return dest
+
+
+def credits_from_duration_s(duration_s: float) -> int:
+    """Billable credits: floor(audio_seconds / 60) × credits-per-minute (verified 119s→1, 121s→2)."""
+    if duration_s < 0:
+        duration_s = 0.0
+    return int(duration_s // 60.0) * C.MVSEP_CREDITS_PER_MINUTE
 
 
 def _cost_cny_from_credits(credits: int | float) -> float:

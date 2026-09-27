@@ -7,7 +7,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 ENGINE = "magicdub-cli"
 PROGRAM_NAME = "magicdub-cli"
-VERSION = "0.2.11"
+VERSION = "0.3.0"
 
 CNY_QUANTUM = "0.00000001"
 
@@ -33,9 +33,10 @@ DEMUCS_USD_PER_AUDIO_SEC = 0.0007
 SAM_AUDIO_USD_PER_30S = 0.05
 SAM_AUDIO_RERANK_USD_PER_30S = 0.025
 SAM_AUDIO_RERANKING_CANDIDATES = 1  # skills snapshot; no “additional” surcharge when 1
-# MVSep DnR v3: 1 credit per successful create; CNY = credits × USD/credit × USD_TO_CNY
-MVSEP_CREDITS_PER_JOB = 1
-MVSEP_USD_PER_CREDIT = 0.0  # current published credit price
+# MVSep DnR v3: credits = floor(audio_seconds / 60) × CREDITS_PER_MINUTE;
+# CNY = credits × USD/credit × USD_TO_CNY (verified: 119s→1 credit, 121s→2 credits).
+MVSEP_CREDITS_PER_MINUTE = 1
+MVSEP_USD_PER_CREDIT = 0.025
 # Bailian Fun-ASR Beijing list price (CNY / content or usage second)
 FUN_ASR_CNY_PER_SEC = 0.00022
 # Bailian Qwen Audio 3.1 ASR Flash Filetrans Beijing list price (CNY / million tokens)
@@ -57,7 +58,6 @@ CONFIG_FILENAME = "config.yaml"
 # Relative paths inside a task root
 MEDIA_SRC = "media/src"
 MEDIA_SENTENCES = "media/sentences"
-EXPORTS = "exports"
 TMP = "tmp"
 STATE_FILENAME = "state.json"
 LOCK_FILENAME = "run.lock"

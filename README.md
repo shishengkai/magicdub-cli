@@ -1,6 +1,6 @@
 # magicdub-cli
 
-本地视频译制 CLI：编排式 pipeline + slot／adapter，产出配音成片、混音母版与 SRT。
+本地视频译制 CLI：编排式 pipeline + slot／adapter，产出配音成片与 SRT（`{原视频 stem}_MagicDub.*`，写在原视频同目录；不再交付独立混音 WAV／`exports/`）。
 
 **设计权威：** [magicdub-cli 系统设计](https://github.com/AaronJiTuo/magicdub-brain/blob/main/Releases/06_magicdub-cli系统设计.md)  
 实现与验收以该文 **第 2 节（v0.1.0）** 为准。永远不做口型修正。

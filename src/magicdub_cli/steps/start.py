@@ -39,6 +39,8 @@ def run_start(
         slots=slots,
     )
     state["assets"]["src"]["video"] = file_ref(dest, relative_to=task_root)
+    # Original user path: deliverables go next to this file as ``{stem}_MagicDub.*``.
+    state["assets"]["src"]["input_path"] = str(video_path)
     state["run"]["status"] = "running"
     state["run"]["steps"]["start"]["status"] = "done"
     save_state(task_root, state)

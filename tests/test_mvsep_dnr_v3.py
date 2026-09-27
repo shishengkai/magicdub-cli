@@ -59,22 +59,36 @@ def test_stem_files_missing_raises() -> None:
         m._stem_files(body, "abc")
 
 
-def test_to_flac(tmp_path: Path) -> None:
-    def _write_silence(path: Path, frames: int = 160_000) -> None:
-        with wave.open(str(path), "wb") as wf:
-            wf.setnchannels(2)
-            wf.setsampwidth(2)
-            wf.setframerate(48000)
-            wf.writeframes(b"\x00\x00" * frames * 2)
+def test_choose_output_format_from_stream() -> None:
+    assert m.choose_output_format_from_stream({"codec_name": "mp3"}) == m.OUTPUT_MP3_320
+    assert m.choose_output_format_from_stream({"codec_name": "aac"}) == m.OUTPUT_M4A
+    assert m.choose_output_format_from_stream({"codec_name": "opus"}) == m.OUTPUT_M4A
+    assert (
+        m.choose_output_format_from_stream({"codec_name": "pcm_s16le", "sample_fmt": "s16"})
+        == m.OUTPUT_FLAC_16
+    )
+    assert (
+        m.choose_output_format_from_stream(
+            {"codec_name": "flac", "bits_per_raw_sample": "24"}
+        )
+        == m.OUTPUT_FLAC_24
+    )
+    assert (
+        m.choose_output_format_from_stream({"codec_name": "pcm_f32le", "sample_fmt": "fltp"})
+        == m.OUTPUT_WAV_32
+    )
+    assert m.choose_output_format_from_stream({"codec_name": "flac"}) == m.OUTPUT_FLAC_16
+    assert m.choose_output_format_from_stream({}) == m.OUTPUT_FLAC_16
 
-    wav = tmp_path / "in.wav"
-    _write_silence(wav)
-    flac = m._to_flac(wav, tmp_path / "out.flac")
-    assert flac.is_file()
-    assert flac.suffix == ".flac"
-    assert flac.stat().st_size > 0
-    # Longer PCM silence compresses; FLAC should beat raw WAV size.
-    assert flac.stat().st_size < wav.stat().st_size
+
+def test_choose_output_format_probes_wav(tmp_path: Path) -> None:
+    path = tmp_path / "s16.wav"
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"\x00\x00" * 800)
+    assert m.choose_output_format(path) == m.OUTPUT_FLAC_16
 
 
 def test_mix_music_sfx(tmp_path: Path) -> None:
@@ -120,11 +134,20 @@ def test_remote_done_hash_missing_raises() -> None:
         m._remote_done_hash({"success": True, "status": "done", "data": {}}, "remote")
 
 
-def test_mvsep_cost_one_credit_at_zero_usd() -> None:
-    # 1 credit × $0.00 × 7 = 0
-    assert C.MVSEP_CREDITS_PER_JOB == 1
-    assert C.MVSEP_USD_PER_CREDIT == 0.0
-    assert m._cost_cny_from_credits(C.MVSEP_CREDITS_PER_JOB) == round(
-        1 * C.MVSEP_USD_PER_CREDIT * USD_TO_CNY, 8
-    )
-    assert m._cost_cny_from_credits(1) == 0.0
+def test_mvsep_credits_floor_minutes() -> None:
+    # Empirically: 119s → 1 credit, 121s → 2 credits (floor minutes).
+    assert m.credits_from_duration_s(119.0) == 1
+    assert m.credits_from_duration_s(121.0) == 2
+    assert m.credits_from_duration_s(60.0) == 1
+    assert m.credits_from_duration_s(59.9) == 0
+    assert m.credits_from_duration_s(0.0) == 0
+
+
+def test_mvsep_cost_per_credit_025_usd() -> None:
+    assert C.MVSEP_CREDITS_PER_MINUTE == 1
+    assert C.MVSEP_USD_PER_CREDIT == 0.025
+    # 1 credit × $0.025 × 7 = ¥0.175
+    assert m._cost_cny_from_credits(1) == round(0.025 * USD_TO_CNY, 8)
+    assert m._cost_cny_from_credits(1) == 0.175
+    # 2 credits (e.g. 121s) → ¥0.35
+    assert m._cost_cny_from_credits(m.credits_from_duration_s(121.0)) == 0.35

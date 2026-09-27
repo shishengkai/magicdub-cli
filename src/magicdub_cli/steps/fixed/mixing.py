@@ -10,7 +10,29 @@ from magicdub_cli import constants as C
 from magicdub_cli.errors import INPUT_INVALID, StepResult, fail_result, ok_result
 from magicdub_cli.ffmpeg_util import FFmpegError, media_duration_ms, run_ffmpeg
 from magicdub_cli.media.files import commit, file_ref
-from magicdub_cli.state.io import save_state
+from magicdub_cli.state.io import empty_file_ref, save_state
+
+
+def deliverable_stem(state: dict[str, Any]) -> str:
+    """Basename stem for deliverables: ``{original_stem}_MagicDub``."""
+    raw = state.get("assets", {}).get("src", {}).get("input_path")
+    if raw:
+        stem = Path(str(raw)).stem.strip()
+        if stem:
+            return f"{stem}_MagicDub"
+    title = str(state.get("title") or "video").strip() or "video"
+    return f"{title}_MagicDub"
+
+
+def deliverable_dir(state: dict[str, Any]) -> Path:
+    """Directory of the user's original video (deliverables sit beside it)."""
+    raw = state.get("assets", {}).get("src", {}).get("input_path")
+    if not raw:
+        raise ValueError("assets.src.input_path missing")
+    parent = Path(str(raw)).expanduser().resolve().parent
+    if not parent.is_dir():
+        raise ValueError(f"deliver directory missing: {parent}")
+    return parent
 
 
 def run(task_root: Path, state: dict[str, Any]) -> StepResult:
@@ -28,11 +50,17 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
     if not non_speech.get("path") or not silent.get("path"):
         return fail_result(INPUT_INVALID, "non_speech or silent_video missing")
 
+    try:
+        out_dir = deliverable_dir(state)
+        base = deliverable_stem(state)
+    except ValueError as exc:
+        return fail_result(INPUT_INVALID, str(exc))
+
     tmp = task_root / C.TMP / "mixing"
     tmp.mkdir(parents=True, exist_ok=True)
-    mix_wav = tmp / "final.wav"
-    mix_mp4 = tmp / "final.mp4"
-    mix_srt = tmp / "final.srt"
+    mix_wav = tmp / "mix.wav"
+    mix_mp4 = tmp / "mix.mp4"
+    mix_srt = tmp / "mix.srt"
 
     try:
         duration_ms = media_duration_ms(task_root / silent["path"])
@@ -42,15 +70,16 @@ def run(task_root: Path, state: dict[str, Any]) -> StepResult:
     except (FFmpegError, OSError, ValueError) as exc:
         return fail_result(INPUT_INVALID, str(exc))
 
-    exports = task_root / C.EXPORTS
-    final_wav = exports / "final.wav"
-    final_mp4 = exports / "final.mp4"
-    final_srt = exports / "final.srt"
-    commit(mix_wav, final_wav)
+    final_mp4 = out_dir / f"{base}.mp4"
+    final_srt = out_dir / f"{base}.srt"
     commit(mix_mp4, final_mp4)
     commit(mix_srt, final_srt)
-    state["assets"]["tgt"]["final_audio"] = file_ref(final_wav, relative_to=task_root)
+    # Intermediate mix stays under tmp only; no standalone audio deliverable.
+    if mix_wav.is_file():
+        mix_wav.unlink(missing_ok=True)
+
     state["assets"]["tgt"]["final_video"] = file_ref(final_mp4, relative_to=task_root)
+    state["assets"]["tgt"]["final_audio"] = empty_file_ref()
     state["assets"]["tgt"]["srt"] = file_ref(final_srt, relative_to=task_root)
     save_state(task_root, state)
     return ok_result()
@@ -174,7 +203,6 @@ def _srt_text(text: str) -> str:
     out = []
     for i, ch in enumerate(text):
         if ch in ",，。":
-            # keep '.' if looks like decimal: digit . digit
             out.append(" ")
         elif ch == ".":
             prev = text[i - 1] if i > 0 else ""

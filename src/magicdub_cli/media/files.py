@@ -16,12 +16,31 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def resolve_asset_path(task_root: Path, ref: dict[str, Any]) -> Path:
+    """Resolve a file_ref path (task-relative or absolute deliverable)."""
+    raw = (ref or {}).get("path")
+    if not raw:
+        raise ValueError("missing file ref path")
+    path = Path(str(raw))
+    if path.is_absolute():
+        return path
+    return (task_root / path).resolve()
+
+
 def file_ref(path: Path, *, relative_to: Path) -> dict[str, Any]:
-    """Build {path, sha256, size_bytes} with path relative to task root using /."""
+    """Build {path, sha256, size_bytes}.
+
+    Paths under ``relative_to`` are stored as posix-relative; otherwise absolute
+    (deliverables next to the user's source video).
+    """
     abs_path = path.resolve()
-    rel = abs_path.relative_to(relative_to.resolve()).as_posix()
+    root = relative_to.resolve()
+    try:
+        stored = abs_path.relative_to(root).as_posix()
+    except ValueError:
+        stored = abs_path.as_posix()
     return {
-        "path": rel,
+        "path": stored,
         "sha256": sha256_file(abs_path),
         "size_bytes": abs_path.stat().st_size,
     }
@@ -30,7 +49,7 @@ def file_ref(path: Path, *, relative_to: Path) -> dict[str, Any]:
 def verify_file_ref(task_root: Path, ref: dict[str, Any]) -> None:
     if not ref or not ref.get("path"):
         raise ValueError("missing file ref path")
-    path = task_root / ref["path"]
+    path = resolve_asset_path(task_root, ref)
     if not path.is_file():
         raise FileNotFoundError(path)
     size = path.stat().st_size

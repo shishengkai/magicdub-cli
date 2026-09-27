@@ -27,7 +27,7 @@ def create_task_dir(projects_dir: Path, video_path: Path) -> tuple[Path, str]:
         suffix = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
         root = projects_dir / f"{name}_{suffix}"
     root.mkdir(parents=False)
-    for sub in (C.MEDIA_SRC, C.MEDIA_SENTENCES, C.EXPORTS, C.TMP):
+    for sub in (C.MEDIA_SRC, C.MEDIA_SENTENCES, C.TMP):
         (root / sub).mkdir(parents=True, exist_ok=True)
     return root, stem
 
