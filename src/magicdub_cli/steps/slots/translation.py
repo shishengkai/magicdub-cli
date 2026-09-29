@@ -17,6 +17,7 @@ from magicdub_cli.errors import (
     ok_result,
 )
 from magicdub_cli.state.io import apply_adapter_cost, new_ledger_id, save_state, utc_now_iso
+from magicdub_cli.steps.slots.translation_context import build_context, validate_translations
 
 
 def run(
@@ -30,41 +31,21 @@ def run(
     if not transcript:
         return fail_result(INPUT_INVALID, "src.transcript missing")
     sentences_all = state["assets"]["sentences"]
-    if sentence_ids is None:
-        batch = list(sentences_all)
-    else:
-        idset = set(sentence_ids)
-        batch = [s for s in sentences_all if s["id"] in idset]
-    if not batch:
-        return fail_result(INPUT_INVALID, "no sentences for translation")
-
-    payload_sentences = []
-    for sent in batch:
-        history = []
-        if attempt >= 2:
-            for tgt in sent.get("tgt") or []:
-                if tgt.get("selection") == "rejected" and tgt.get("audio_duration") is not None:
-                    history.append(
-                        {
-                            "attempt": tgt["attempt"],
-                            "text": tgt["text"],
-                            "tts_duration_ms": tgt["audio_duration"],
-                            "fitting_ratio": tgt.get("fitting_ratio"),
-                        }
-                    )
-        payload_sentences.append(
-            {
-                "id": sent["id"],
-                "src_text": sent["src"]["text"],
-                "target_duration_ms": sent["src"]["audio_duration"],
-                "attempt": attempt,
-                "history": history,
-            }
+    try:
+        document, payload_sentences = build_context(
+            sentences_all,
+            sentence_ids=sentence_ids,
+            attempt=attempt,
+            fitting=state["run"]["fitting"],
         )
+    except ValueError as exc:
+        return fail_result(INPUT_INVALID, str(exc))
+    expected_ids = {s["id"] for s in payload_sentences}
+    batch = [s for s in sentences_all if s["id"] in expected_ids]
 
     order = state["run"]["slots"]["translation"]["order"]
     creds = load_credentials()
-    tmp = task_root / C.TMP / "translation"
+    tmp = task_root / C.TMP / "translation" / f"attempt_{attempt}"
     max_attempt = 1 + int(state["run"]["fitting"]["max_rewrites"])
     last_err: AdapterError | None = None
     for adapter_id in order:
@@ -78,18 +59,22 @@ def run(
                     "src_language": state["assets"]["src"]["language"],
                     "tgt_language": state["assets"]["tgt"]["language"],
                     "sentences": payload_sentences,
+                    "document": document,
+                    "fitting": dict(state["run"]["fitting"]),
                     "max_attempt": max_attempt,
                 },
                 tmp,
             )
-            by_id = {int(t["id"]): t["text"] for t in out["translations"]}
+            cost = out.get("cost_cny")
+            try:
+                by_id = validate_translations(out.get("translations"), expected_ids)
+            except ValueError as exc:
+                _ledger(state, adapter_id, False, INPUT_INVALID, cost, str(exc), attempt)
+                apply_adapter_cost(state, "cost_of_translation", cost)
+                save_state(task_root, state)
+                return fail_result(INPUT_INVALID, str(exc))
             for sent in batch:
-                text = by_id.get(sent["id"])
-                if text is None or not str(text).strip():
-                    return fail_result(
-                        INPUT_INVALID,
-                        f"missing translation for sentence {sent['id']}",
-                    )
+                text = by_id[sent["id"]]
                 # replace or append attempt entry
                 tgt_list = sent.setdefault("tgt", [])
                 existing = next((t for t in tgt_list if t.get("attempt") == attempt), None)
@@ -100,6 +85,7 @@ def run(
                     "audio_duration": None,
                     "fitting_ratio": None,
                     "selection": None,
+                    "translation_prompt_version": out.get("prompt_version"),
                     "aligned_audio": {"path": None, "sha256": None, "size_bytes": None},
                 }
                 if existing is not None:
@@ -107,7 +93,6 @@ def run(
                 else:
                     tgt_list.append(entry)
 
-            cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None, attempt)
             apply_adapter_cost(state, "cost_of_translation", cost)
             save_state(task_root, state)
@@ -115,6 +100,7 @@ def run(
         except AdapterError as exc:
             last_err = exc
             _ledger(state, adapter_id, False, exc.code, exc.cost_cny, exc.message, attempt)
+            apply_adapter_cost(state, "cost_of_translation", exc.cost_cny)
             save_state(task_root, state)
             continue
     msg = last_err.message if last_err else "translation adapters exhausted"

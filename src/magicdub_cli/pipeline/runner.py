@@ -135,6 +135,11 @@ def _run_fitting_rounds(task_root: Path, state: dict[str, Any]) -> bool:
             ):
                 return False
             apply_attempt_selection(state, sentence_id=sid, attempt=attempt, lo=lo, hi=hi)
+            sent = next(s for s in state["assets"]["sentences"] if s["id"] == sid)
+            tgt = next(t for t in sent["tgt"] if t["attempt"] == attempt)
+            if sent.get("selected_attempt") is None and tgt.get("reused_from_attempt") is not None:
+                select_attempt(sent, closest_attempt(sent, lo, hi), "forced")
+                sent["fitting_stop_reason"] = "unchanged_text"
             save_state(task_root, state)
 
         rejected_ids = unsettled_sentence_ids(state)
@@ -158,6 +163,7 @@ def _run_fitting_rounds(task_root: Path, state: dict[str, Any]) -> bool:
             sent = next(s for s in state["assets"]["sentences"] if s["id"] == sid)
             best = closest_attempt(sent, lo, hi)
             select_attempt(sent, best, "forced")
+            sent["fitting_stop_reason"] = "max_rewrites"
         save_state(task_root, state)
 
     return True
@@ -203,6 +209,7 @@ def apply_attempt_selection(
     ratio = float(tgt["fitting_ratio"])
     if lo <= ratio <= hi:
         select_attempt(sent, attempt, "fitting_pass")
+        sent["fitting_stop_reason"] = "within_range"
         return "fitting_pass"
     tgt["selection"] = "rejected"
     return "rejected"

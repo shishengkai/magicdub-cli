@@ -16,7 +16,7 @@ from magicdub_cli.errors import (
     fail_result,
     ok_result,
 )
-from magicdub_cli.media.files import commit, file_ref
+from magicdub_cli.media.files import commit, file_ref, verify_file_ref
 from magicdub_cli.state.io import apply_adapter_cost, new_ledger_id, save_state, utc_now_iso
 
 
@@ -30,8 +30,29 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
     ref = sent["src"].get("audio") or {}
     if not ref.get("path"):
         return fail_result(INPUT_INVALID, f"sentence {sentence_id} src.audio missing")
+    try:
+        verify_file_ref(task_root, ref)
+    except (ValueError, OSError) as exc:
+        return fail_result(INPUT_INVALID, str(exc))
 
     order = state["run"]["slots"]["tts"]["order"]
+    for previous in sorted(sent.get("tgt", []), key=lambda t: t["attempt"]):
+        if previous["attempt"] >= attempt:
+            continue
+        signature = previous.get("tts_input") or {}
+        adapter_id = signature.get("adapter_id")
+        if adapter_id not in order or signature != _tts_input(sent, tgt, adapter_id):
+            continue
+        try:
+            verify_file_ref(task_root, previous.get("audio") or {})
+        except (ValueError, OSError):
+            continue
+        tgt["audio"] = dict(previous["audio"])
+        tgt["tts_input"] = dict(signature)
+        tgt["reused_from_attempt"] = previous["attempt"]
+        save_state(task_root, state)
+        return ok_result(adapter_id)
+
     creds = load_credentials()
     tmp = task_root / C.TMP / "tts" / str(sentence_id) / f"attempt_{attempt}"
     last_err: AdapterError | None = None
@@ -63,6 +84,7 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
             )
             commit(audio_tmp, final)
             tgt["audio"] = file_ref(final, relative_to=task_root)
+            tgt["tts_input"] = _tts_input(sent, tgt, adapter_id)
             cost = out.get("cost_cny")
             _ledger(state, adapter_id, True, None, cost, None, sentence_id, attempt)
             apply_adapter_cost(state, "cost_of_tts", cost)
@@ -84,6 +106,18 @@ def run(task_root: Path, state: dict[str, Any], *, sentence_id: int, attempt: in
             continue
     msg = last_err.message if last_err else "tts adapters exhausted"
     return fail_result(ADAPTER_EXHAUSTED, msg)
+
+
+def _tts_input(sent: dict[str, Any], tgt: dict[str, Any], adapter_id: str) -> dict[str, Any]:
+    """Exact inputs within this sentence/task; a legacy entry without this cannot be reused."""
+    ref = sent["src"]["audio"]
+    return {
+        "adapter_id": adapter_id,
+        "text": tgt["text"],
+        "source_text": sent["src"]["text"],
+        "reference_sha256": ref["sha256"],
+        "reference_size_bytes": ref["size_bytes"],
+    }
 
 
 def _ledger(

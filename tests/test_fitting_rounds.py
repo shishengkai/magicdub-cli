@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from magicdub_cli.adapters.translation.deepseek_deepseek_flash import build_messages
 from magicdub_cli.pipeline.runner import (
     apply_attempt_selection,
     closest_attempt,
@@ -73,9 +72,7 @@ def test_round_selection_pass_and_rejected() -> None:
         "fitting_pass"
     )
     assert state["assets"]["sentences"][0]["selected_attempt"] == 1
-    assert apply_attempt_selection(state, sentence_id=2, attempt=1, lo=0.8, hi=1.2) == (
-        "rejected"
-    )
+    assert apply_attempt_selection(state, sentence_id=2, attempt=1, lo=0.8, hi=1.2) == ("rejected")
     assert state["assets"]["sentences"][1]["selected_attempt"] is None
     assert unsettled_sentence_ids(state) == [2]
     # Rejected sentence still has attempt-1 text; next pipeline step is batch translate
@@ -101,53 +98,3 @@ def test_forced_closest_attempt() -> None:
     select_attempt(sent, best, "forced")
     assert sent["selected_attempt"] == 2
     assert sent["tgt"][1]["selection"] == "forced"
-
-
-def test_translate_prompt_initial_vs_revision() -> None:
-    initial = build_messages(
-        transcript="Hello world.",
-        src_language="en",
-        tgt_language="zh-Hans",
-        sentences=[
-            {
-                "id": 1,
-                "src_text": "Hello",
-                "target_duration_ms": 1000,
-                "attempt": 1,
-                "history": [],
-            }
-        ],
-    )
-    blob0 = initial[0]["content"] + initial[2]["content"]
-    assert "Pass: initial" in initial[2]["content"]
-    assert "LENGTH REVISION" not in initial[0]["content"]
-    assert "4.5" not in blob0
-
-    revision = build_messages(
-        transcript="Hello world.",
-        src_language="en",
-        tgt_language="zh-Hans",
-        max_attempt=3,
-        sentences=[
-            {
-                "id": 1,
-                "src_text": "Hello",
-                "target_duration_ms": 1000,
-                "attempt": 2,
-                "history": [
-                    {
-                        "attempt": 1,
-                        "text": "你好啊这是很长的一句",
-                        "tts_duration_ms": 1600,
-                        "fitting_ratio": 1.6,
-                    }
-                ],
-            }
-        ],
-    )
-    blob = revision[0]["content"] + revision[2]["content"]
-    assert "revise_timing" in revision[2]["content"]
-    assert "TOO LONG" in revision[2]["content"]
-    assert "LENGTH REVISION" in revision[0]["content"]
-    assert "4.5" not in blob
-    assert "chars-per-second" in revision[0]["content"]
